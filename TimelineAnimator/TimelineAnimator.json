@@ -1,0 +1,14 @@
+{
+  "Author": "DarkmodeLeyla",
+  "Name": "TimelineAnimator",
+  "Punchline": "A keyframe animator for in-game posing.",
+  "Description": "A simple keyframe editor to create and play back animations using Ktisis. Use /animator to open the plugin window.",
+  "RepoUrl": "https://github.com/NoHideout/TimelineAnimator",
+  "IconUrl": "https://raw.githubusercontent.com/NoHideout/TimelineAnimator/master/Icon.png",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "posing",
+    "animation",
+    "timeline"
+  ]
+}
