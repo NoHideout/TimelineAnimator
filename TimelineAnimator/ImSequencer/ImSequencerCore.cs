@@ -115,7 +115,7 @@ namespace TimelineAnimator.ImSequencer
                 try
                 {
                     var childWidth = ImGui.GetContentRegionAvail().X;
-                    var controlHeight = visibleTracks.Count * ItemHeight;
+                    var controlHeight = Math.Max(visibleTracks.Count * ItemHeight, ImGui.GetContentRegionAvail().Y);
 
                     ImGui.InvisibleButton("contentBar", new Vector2(childWidth, controlHeight));
                     ImGui.SetItemAllowOverlap();
