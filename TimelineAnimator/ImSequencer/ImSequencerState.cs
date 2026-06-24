@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Numerics;
 using TimelineAnimator.Data;
 
@@ -40,6 +42,6 @@ public class ImSequencerState
     public ZoomScrollbar.State ZoomState = new();
 
     internal int contextTrackIndex = -1;
-    internal TrackKeyframe? contextKeyframe = null;
+    internal ITrackKeyframe? contextKeyframe = null;
     internal int contextMouseFrame = -1;
 }

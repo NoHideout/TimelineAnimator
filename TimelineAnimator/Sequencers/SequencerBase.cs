@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Dalamud.Bindings.ImGui;
 using TimelineAnimator.Data;
 using TimelineAnimator.ImSequencer;
@@ -21,25 +24,27 @@ namespace TimelineAnimator.Sequencers
             this.HandleContextMenu(modifierHeld, ref selectedEntry);
         }
 
-        public List<TrackKeyframe> GetSelectedKeyframes()
+        public List<ITrackKeyframe> GetSelectedKeyframes()
         {
             return State.SelectedKeyframes
-                .Select(sk => Sequence.GetTrack(sk.trackIndex)?.Keyframes.FirstOrDefault(k => k.Id == sk.keyframeId))
+                .Select(sk => Sequence.GetTrack(sk.trackIndex)?.GetUntypedKeyframes().FirstOrDefault(k => k.Id == sk.keyframeId))
                 .Where(kf => kf != null)
                 .ToList()!;
         }
 
         public int GetSelectedKeyframeCount() => State.SelectedKeyframes.Count;
 
-        public TrackKeyframe? GetFirstSelectedKeyframe() => GetSelectedKeyframes().FirstOrDefault();
-
+        public ITrackKeyframe? GetFirstSelectedKeyframe() => GetSelectedKeyframes().FirstOrDefault();
         public void DeleteSelectedKeyframes()
         {
             var selectedIds = State.SelectedKeyframes.Select(sk => sk.keyframeId).ToHashSet();
             foreach (var trackIndex in State.SelectedKeyframes.Select(x => x.trackIndex).Distinct())
             {
                 var track = Sequence.GetTrack(trackIndex);
-                if (track != null) track.Keyframes.RemoveAll(k => selectedIds.Contains(k.Id));
+                if (track != null)
+                {
+                    foreach (var id in selectedIds) track.DeleteKeyframe(id);
+                }
             }
 
             State.SelectedKeyframes.Clear();
@@ -82,13 +87,13 @@ namespace TimelineAnimator.Sequencers
 
             if (ImGui.MenuItem("Edit Easing", string.Empty, false, canUseKeyframe))
             {
-                var keyframesToEdit = new List<TrackKeyframe>();
+                var keyframesToEdit = new List<ITrackKeyframe>();
                 if (hasSelection)
                 {
                     foreach (var sk in State.SelectedKeyframes)
                     {
                         var track = Sequence.GetTrack(sk.trackIndex);
-                        var kf = track?.Keyframes.FirstOrDefault(k => k.Id == sk.keyframeId);
+                        var kf = track?.GetUntypedKeyframes().FirstOrDefault(k => k.Id == sk.keyframeId);
                         if (kf != null) keyframesToEdit.Add(kf);
                     }
                 }
@@ -107,7 +112,7 @@ namespace TimelineAnimator.Sequencers
 
             if (ImGui.MenuItem("Copy", string.Empty, false, canUseKeyframe))
             {
-                var keyframesToCopy = new List<TrackKeyframe>();
+                var keyframesToCopy = new List<ITrackKeyframe>();
                 var keyframeToTrackMap = new Dictionary<Guid, int>();
 
                 if (hasSelection)
@@ -115,7 +120,7 @@ namespace TimelineAnimator.Sequencers
                     foreach (var sk in State.SelectedKeyframes)
                     {
                         var track = Sequence.GetTrack(sk.trackIndex);
-                        var kf = track?.Keyframes.FirstOrDefault(k => k.Id == sk.keyframeId);
+                        var kf = track?.UntypedKeyframes.FirstOrDefault(k => k.Id == sk.keyframeId);
                         if (kf != null)
                         {
                             keyframesToCopy.Add(kf);
@@ -140,43 +145,21 @@ namespace TimelineAnimator.Sequencers
 
                 if (clipboardData.Any())
                 {
-                    var allFrames = clipboardData.Select(ckf => ckf.Keyframe.Frame).ToList();
-                    var minFrame = allFrames.Min();
-                    var maxFrame = allFrames.Max();
-                    var blockCenterFrame = (minFrame + maxFrame) / 2;
+                    var blockCenterFrame = (clipboardData.Min(c => c.Keyframe.Frame) + clipboardData.Max(c => c.Keyframe.Frame)) / 2;
 
-                    var keyframesByTrack = clipboardData.GroupBy(ckf => ckf.TrackIndex);
-
-                    foreach (var group in keyframesByTrack)
+                    foreach (var group in clipboardData.GroupBy(ckf => ckf.TrackIndex))
                     {
-                        var targetTrackIndex = group.Key;
-                        var targetTrack = Sequence.GetTrack(targetTrackIndex);
-
+                        var targetTrack = Sequence.GetTrack(group.Key);
                         if (targetTrack != null)
                         {
                             foreach (var copiedKeyframe in group)
                             {
-                                var frameOffset = copiedKeyframe.Keyframe.Frame - blockCenterFrame;
-                                var newFrame = pasteFrame + frameOffset;
-
-                                targetTrack.Keyframes.RemoveAll(k => k.Frame == newFrame);
-
-                                var newKf = new TrackKeyframe(newFrame, copiedKeyframe.Keyframe.Transform)
-                                {
-                                    P1 = copiedKeyframe.Keyframe.P1,
-                                    P2 = copiedKeyframe.Keyframe.P2,
-                                    Shape = copiedKeyframe.Keyframe.Shape,
-                                    CustomColor = copiedKeyframe.Keyframe.CustomColor,
-                                };
-
-                                targetTrack.Keyframes.Add(newKf);
+                                int newFrame = pasteFrame + (copiedKeyframe.Keyframe.Frame - blockCenterFrame);
+                                targetTrack.PasteKeyframe(newFrame, copiedKeyframe.Keyframe); 
                             }
-
-                            targetTrack.Keyframes = targetTrack.Keyframes.OrderBy(k => k.Frame).ToList();
                         }
                     }
                 }
-
                 ImGui.CloseCurrentPopup();
             }
 
@@ -187,21 +170,16 @@ namespace TimelineAnimator.Sequencers
             {
                 if (hasSelection)
                 {
-                    var toDelete = State.SelectedKeyframes.ToList();
-                    foreach (var sk in toDelete)
+                    foreach (var sk in State.SelectedKeyframes.ToList())
                     {
-                        var track = Sequence.GetTrack(sk.trackIndex);
-                        track?.DeleteKeyframe(sk.keyframeId);
+                        Sequence.GetTrack(sk.trackIndex)?.DeleteKeyframe(sk.keyframeId);
                     }
-
                     State.SelectedKeyframes.Clear();
                 }
                 else if (contextKf != null)
                 {
-                    var track = Sequence.GetTrack(State.contextTrackIndex);
-                    track?.DeleteKeyframe(contextKf.Id);
+                    Sequence.GetTrack(State.contextTrackIndex)?.DeleteKeyframe(contextKf.Id);
                 }
-
                 ImGui.CloseCurrentPopup();
             }
 

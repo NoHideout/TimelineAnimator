@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TimelineAnimator.Data;
 
 namespace TimelineAnimator.ImSequencer

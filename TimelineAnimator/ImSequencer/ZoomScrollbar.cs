@@ -1,3 +1,4 @@
+using System;
 using Dalamud.Bindings.ImGui;
 
 public sealed class ZoomScrollbar

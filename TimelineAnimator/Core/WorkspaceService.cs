@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using TimelineAnimator.Data;
 using TimelineAnimator.ImSequencer;
 
@@ -5,8 +7,8 @@ namespace TimelineAnimator;
 
 public class WorkspaceService
 {
-    public event Action<List<TrackKeyframe>?>? EditEasingRequested;
-    public void RequestEditEasing(List<TrackKeyframe>? keyframes) => EditEasingRequested?.Invoke(keyframes);
+    public event Action<List<ITrackKeyframe>?>? EditEasingRequested;
+    public void RequestEditEasing(List<ITrackKeyframe>? keyframes) => EditEasingRequested?.Invoke(keyframes);
     
     public int SharedSelectedEntry { get; set; } = -1;
     public int ActiveSequencerIndex { get; set; } = -1;

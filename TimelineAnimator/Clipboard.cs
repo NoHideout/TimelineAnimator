@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using TimelineAnimator.Data;
 
 namespace TimelineAnimator;
@@ -6,10 +8,10 @@ public static class Clipboard
 {
     public class CopiedKeyframe
     {
-        public TrackKeyframe Keyframe { get; }
+        public ITrackKeyframe Keyframe { get; }
         public int TrackIndex { get; }
 
-        public CopiedKeyframe(TrackKeyframe keyframe, int trackIndex)
+        public CopiedKeyframe(ITrackKeyframe keyframe, int trackIndex)
         {
             Keyframe = keyframe;
             TrackIndex = trackIndex;
@@ -20,7 +22,7 @@ public static class Clipboard
 
     public static bool HasData => data.Count > 0;
 
-    public static void Copy(List<TrackKeyframe> keyframes, Dictionary<Guid, int> trackMap)
+    public static void Copy(List<ITrackKeyframe> keyframes, Dictionary<Guid, int> trackMap)
     {
         data.Clear();
         foreach (var kf in keyframes)

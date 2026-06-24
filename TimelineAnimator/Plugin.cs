@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Command;
 using Dalamud.Interface;
@@ -195,13 +198,13 @@ public sealed class Plugin : IDalamudPlugin
     public void ToggleMainUi() => MainWindow?.Toggle();
     public void ToggleTutorialWindow() => TutorialWindow?.Toggle();
 
-    public void OpenEasingUiForKeyframes(List<TrackKeyframe>? keyframes)
+    public void OpenEasingUiForKeyframes(List<ITrackKeyframe>? keyframes)
     {
         EasingWindow?.SetKeyframes(keyframes);
         if (EasingWindow != null) EasingWindow.IsOpen = true;
     }
 
-    public void UpdateEasingUiKeyframes(List<TrackKeyframe>? keyframes)
+    public void UpdateEasingUiKeyframes(List<ITrackKeyframe>? keyframes)
     {
         EasingWindow?.SetKeyframes(keyframes);
     }

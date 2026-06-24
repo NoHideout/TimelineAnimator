@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using TimelineAnimator.Data;
@@ -21,23 +23,23 @@ namespace TimelineAnimator.Sequencers
         {
             var matrices = new Dictionary<string, Matrix4x4>();
 
-            foreach (var track in Sequence.Tracks)
+            foreach (var abstractTrack in Sequence.Tracks)
             {
-                var transform = AnimationHelpers.GetInterpolatedTransform(this, track, frame);
-                if (transform != null)
+                if (abstractTrack is TimelineTrack<TransformState> track)
                 {
-                    var pos = transform.Value.Position;
-                    var rot = transform.Value.Rotation;
-                    var scale = transform.Value.Scale;
+                    var transform = AnimationHelpers.GetInterpolatedTransform(this, track, frame);
+                    if (transform != null)
+                    {
+                        var pos = transform.Value.Position;
+                        var rot = transform.Value.Rotation;
+                        var scale = transform.Value.Scale;
 
-                    matrices[track.Name] = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(rot) * Matrix4x4.CreateTranslation(pos);
+                        matrices[track.Name] = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(rot) * Matrix4x4.CreateTranslation(pos);
+                    }
                 }
             }
 
-            if (matrices.Count > 0)
-            {
-                _ = Services.KtisisIpc.SendAnimationFrame(ActorIndex, matrices);
-            }
+            if (matrices.Count > 0) _ = Services.KtisisIpc.SendAnimationFrame(ActorIndex, matrices);
         }
 
         public override void RebuildHierarchy()

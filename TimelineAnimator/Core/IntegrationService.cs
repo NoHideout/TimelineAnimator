@@ -1,3 +1,6 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 using TimelineAnimator.Data;
 using TimelineAnimator.Interop;
 using TimelineAnimator.Sequencers;
@@ -47,8 +50,8 @@ public class IntegrationService
                     {
                         string parentName = nativeBones.TryGetValue(TrackName, out var info) ? info.ParentName : "";
                         
-                        newSequencer.Sequence.AddTrack(TrackName);
-                        var track = newSequencer.Sequence.GetTrackByName(TrackName);
+                        newSequencer.Sequence.AddTrack<TransformState>(TrackName, TrackType.Transform);
+                        var track = newSequencer.Sequence.GetTrackByName(TrackName) as TimelineTrack<TransformState>;
                         if (track != null) track.ParentName = parentName;
                     }
 
@@ -63,11 +66,11 @@ public class IntegrationService
                     {
                         string parentName = nativeBones.TryGetValue(TrackName, out var info) ? info.ParentName : "";
                         
-                        var track = existingSequencer.Sequence.GetTrackByName(TrackName);
+                        var track = existingSequencer.Sequence.GetTrackByName(TrackName) as TimelineTrack<TransformState>;
                         if (track == null)
                         {
-                            existingSequencer.Sequence.AddTrack(TrackName);
-                            track = existingSequencer.Sequence.GetTrackByName(TrackName);
+                            existingSequencer.Sequence.AddTrack<TransformState>(TrackName, TrackType.Transform);
+                            track = existingSequencer.Sequence.GetTrackByName(TrackName) as TimelineTrack<TransformState>;
                             if (track != null) track.ParentName = parentName;
                         }
                         else
@@ -77,8 +80,8 @@ public class IntegrationService
                             
                             TransformState? boneTransform = defaultPose.TryGetValue(TrackName, out var bone) ? bone : (TransformState?)null;
 
-                            if (existingKeyframe == null) track.AddKeyframe(playback.CurrentFrame, boneTransform);
-                            else if (boneTransform.HasValue) existingKeyframe.Transform = boneTransform.Value;
+                            if (existingKeyframe == null) track.AddKeyframe(playback.CurrentFrame, boneTransform ?? TransformState.Identity);
+                            else if (boneTransform.HasValue) existingKeyframe.Value = boneTransform.Value;
                         }
                     }
 

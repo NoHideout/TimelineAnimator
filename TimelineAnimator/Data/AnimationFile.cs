@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Numerics;
 
 namespace TimelineAnimator.Data;
@@ -31,19 +32,19 @@ public class AnimationKeyframe
     {
     }
 
-    public AnimationKeyframe(TrackKeyframe kf)
+    public AnimationKeyframe(TrackKeyframe<TransformState> kf)
     {
         Frame = kf.Frame;
-        Transform = kf.Transform;
+        Transform = kf.Value;
         Shape = kf.Shape;
         CustomColor = kf.CustomColor;
         P1 = kf.P1;
         P2 = kf.P2;
     }
 
-    public TrackKeyframe ToKeyframe()
+    public TrackKeyframe<TransformState> ToKeyframe()
     {
-        return new TrackKeyframe(Frame, Transform)
+        return new TrackKeyframe<TransformState>(Frame, Transform)
         {
             Shape = Shape,
             CustomColor = CustomColor,

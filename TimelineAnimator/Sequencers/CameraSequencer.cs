@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Keys;
@@ -19,9 +21,9 @@ namespace TimelineAnimator.Sequencers
 
         public CameraSequencer()
         {
-            Sequence.AddTrack("Camera Position");
-            Sequence.AddTrack("Camera Rotation");
-            Sequence.AddTrack("Camera FOV");
+            Sequence.AddTrack<TransformState>(Constants.TrackNames.CameraPosition, TrackType.Transform);
+            Sequence.AddTrack<TransformState>(Constants.TrackNames.CameraRotation, TrackType.Transform);
+            Sequence.AddTrack<TransformState>(Constants.TrackNames.CameraFOV, TrackType.Transform);
 
             var camState = Services.CameraService.GetCurrentCameraState();
 
@@ -34,9 +36,9 @@ namespace TimelineAnimator.Sequencers
                 FieldOfView = camState.FoV
             };
 
-            DefaultPose["Camera Position"] = defaultTransform;
-            DefaultPose["Camera Rotation"] = defaultTransform;
-            DefaultPose["Camera FOV"] = defaultTransform;
+            DefaultPose[Constants.TrackNames.CameraPosition] = defaultTransform;
+            DefaultPose[Constants.TrackNames.CameraRotation] = defaultTransform;
+            DefaultPose[Constants.TrackNames.CameraFOV] = defaultTransform;
         }
 
         public override void Draw(ImSequencerCore uiCore, ref int currentFrame, ref int selectedEntry,
@@ -64,8 +66,7 @@ namespace TimelineAnimator.Sequencers
 
             foreach (var trackName in trackNames)
             {
-                var track = Sequence.GetTrackByName(trackName);
-                if (track != null)
+                if (Sequence.GetTrackByName(trackName) is TimelineTrack<TransformState> track)
                 {
                     var transformState = new TransformState
                     {
@@ -134,16 +135,13 @@ namespace TimelineAnimator.Sequencers
         {
             if (!Services.CameraService.IsOverridden) return;
 
-            var posTrack = Sequence.GetTrackByName("Camera Position");
-            var rotTrack = Sequence.GetTrackByName("Camera Rotation");
-            var fovTrack = Sequence.GetTrackByName("Camera FOV");
+            var posTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraPosition) as TimelineTrack<TransformState>;
+            var rotTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraRotation) as TimelineTrack<TransformState>;
+            var fovTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraFOV) as TimelineTrack<TransformState>;
 
-            var posTransform =
-                posTrack != null ? AnimationHelpers.GetInterpolatedTransform(this, posTrack, frame) : null;
-            var rotTransform =
-                rotTrack != null ? AnimationHelpers.GetInterpolatedTransform(this, rotTrack, frame) : null;
-            var fovTransform =
-                fovTrack != null ? AnimationHelpers.GetInterpolatedTransform(this, fovTrack, frame) : null;
+            var posTransform = posTrack != null ? AnimationHelpers.GetInterpolatedTransform(this, posTrack, frame) : null;
+            var rotTransform = rotTrack != null ? AnimationHelpers.GetInterpolatedTransform(this, rotTrack, frame) : null;
+            var fovTransform = fovTrack != null ? AnimationHelpers.GetInterpolatedTransform(this, fovTrack, frame) : null;
 
             position = posTransform != null ? posTransform.Value.Position : position;
             rotation = rotTransform != null ? rotTransform.Value.Rotation : rotation;

@@ -1,4 +1,7 @@
-﻿using Dalamud.Bindings.ImGui;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
 using System.Numerics;
 using TimelineAnimator.Data;
@@ -7,7 +10,7 @@ namespace TimelineAnimator.Windows;
 
 public class EasingWindow : Window, IDisposable
 {
-    private readonly List<TrackKeyframe> currentKeyframes = new();
+    private readonly List<ITrackKeyframe> currentKeyframes = new();
 
     private Vector2 p1 = new(0.25f, 0.25f);
     private Vector2 p2 = new(0.75f, 0.75f);
@@ -48,7 +51,7 @@ public class EasingWindow : Window, IDisposable
     {
     }
 
-    public void SetKeyframes(List<TrackKeyframe>? keyframes)
+    public void SetKeyframes(List<ITrackKeyframe>? keyframes)
     {
         currentKeyframes.Clear();
         if (keyframes != null && keyframes.Any())

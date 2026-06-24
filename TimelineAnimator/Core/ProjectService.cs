@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using TimelineAnimator.Data;
 using TimelineAnimator.ImSequencer;
 using TimelineAnimator.Sequencers;
@@ -82,12 +85,16 @@ public class ProjectService
         foreach (var (TrackName, transform) in activeSequencer.DefaultPose)
             animationFile.BaseState[TrackName] = transform;
 
-        foreach (var track in activeSequencer.Sequence.Tracks)
+        foreach (var abstractTrack in activeSequencer.Sequence.Tracks)
         {
-            var animationTrack = new AnimationTrack { TrackName = track.Name };
-            foreach (var keyframe in track.Keyframes)
-                animationTrack.Keyframes.Add(new AnimationKeyframe(keyframe));
-
+            var animationTrack = new AnimationTrack { TrackName = abstractTrack.Name };
+            
+            if (abstractTrack is TimelineTrack<TransformState> track)
+            {
+                foreach (var keyframe in track.Keyframes)
+                    animationTrack.Keyframes.Add(new AnimationKeyframe(keyframe));
+            }
+            
             animationFile.Tracks.Add(animationTrack);
         }
 
@@ -101,13 +108,14 @@ public class ProjectService
         activeSequencer.Sequence.Tracks.Clear();
         activeSequencer.Sequence.FrameMax = animationFile.EndFrame;
 
-        foreach (var track in animationFile.Tracks)
+        foreach (var trackData in animationFile.Tracks)
         {
-            activeSequencer.Sequence.AddTrack(track.TrackName);
-            var animation = activeSequencer.Sequence.GetTrackByName(track.TrackName);
+            activeSequencer.Sequence.AddTrack<TransformState>(trackData.TrackName, TrackType.Transform);
+            var animation = activeSequencer.Sequence.GetTrackByName(trackData.TrackName) as TimelineTrack<TransformState>;
+            
             if (animation == null) continue;
 
-            foreach (var keyframe in track.Keyframes)
+            foreach (var keyframe in trackData.Keyframes)
                 animation.Keyframes.Add(keyframe.ToKeyframe());
         }
 

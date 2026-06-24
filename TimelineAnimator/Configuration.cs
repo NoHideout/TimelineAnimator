@@ -1,4 +1,5 @@
-﻿using Dalamud.Configuration;
+﻿using System;
+using Dalamud.Configuration;
 using Dalamud.Game.ClientState.Keys;
 
 namespace TimelineAnimator;

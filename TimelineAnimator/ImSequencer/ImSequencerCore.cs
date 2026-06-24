@@ -5,6 +5,9 @@
 // Original code licensed under the MIT License.
 // See LICENSES/MIT-ImSequencer.txt
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Dalamud.Bindings.ImGui;
 using System.Numerics;
 using TimelineAnimator.Data;
@@ -428,7 +431,7 @@ namespace TimelineAnimator.ImSequencer
                     int absoluteIndex = safeTracks.IndexOf(track);
                     float y = ctx.ContentMin.Y + ctx.ItemHeight * i + (ctx.ItemHeight / 2f);
 
-                    foreach (var kf in track.Keyframes.ToList())
+                    foreach (var kf in track.UntypedKeyframes.ToList())
                     {
                         float x = (float)(ctx.ContentMin.X + ctx.LeftOffset +
                                           (kf.Frame - state.ZoomState.ViewMin) * state.framePixelWidth);
@@ -581,7 +584,7 @@ namespace TimelineAnimator.ImSequencer
                 int absoluteIndex = safeTracks.IndexOf(track);
                 float y = ctx.ContentMin.Y + ctx.ItemHeight * i + (ctx.ItemHeight / 2f);
 
-                foreach (var kf in track.Keyframes.ToList())
+                foreach (var kf in track.UntypedKeyframes.ToList())
                 {
                     float x = (float)(ctx.ContentMin.X + ctx.LeftOffset +
                                       (kf.Frame - state.ZoomState.ViewMin) * state.framePixelWidth);
@@ -666,7 +669,7 @@ namespace TimelineAnimator.ImSequencer
             {
                 bool canMove = state.SelectedKeyframes.All(sk =>
                 {
-                    var kf = sequence.GetTrack(sk.trackIndex)?.Keyframes.FirstOrDefault(k => k.Id == sk.keyframeId);
+                    var kf = sequence.GetTrack(sk.trackIndex)?.UntypedKeyframes.FirstOrDefault(k => k.Id == sk.keyframeId);
                     return kf != null && kf.Frame + diffFrame >= sequence.FrameMin &&
                            kf.Frame + diffFrame <= sequence.FrameMax;
                 });
@@ -675,7 +678,7 @@ namespace TimelineAnimator.ImSequencer
                 {
                     foreach (var sk in state.SelectedKeyframes)
                     {
-                        var kf = sequence.GetTrack(sk.trackIndex)?.Keyframes.FirstOrDefault(k => k.Id == sk.keyframeId);
+                        var kf = sequence.GetTrack(sk.trackIndex)?.UntypedKeyframes.FirstOrDefault(k => k.Id == sk.keyframeId);
                         if (kf != null) kf.Frame += diffFrame;
                     }
 
@@ -693,7 +696,7 @@ namespace TimelineAnimator.ImSequencer
                     var track = sequence.GetTrack(trackIndex);
                     if (track != null)
                     {
-                        var frameGroups = track.Keyframes.GroupBy(k => k.Frame);
+                        var frameGroups = track.UntypedKeyframes.GroupBy(k => k.Frame);
                         var toDelete = new HashSet<Guid>();
 
                         foreach (var group in frameGroups)
@@ -709,8 +712,10 @@ namespace TimelineAnimator.ImSequencer
                             }
                         }
 
-                        track.Keyframes.RemoveAll(k => toDelete.Contains(k.Id));
-                        track.Keyframes = track.Keyframes.OrderBy(k => k.Frame).ToList();
+                        foreach (var id in toDelete)
+                        {
+                            track.DeleteKeyframe(id);
+                        }
                     }
                 }
 

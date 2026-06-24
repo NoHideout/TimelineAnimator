@@ -1,5 +1,7 @@
 ﻿//should prob be somewhere else but eh CBA for now
 
+using System.Collections.Generic;
+
 namespace TimelineAnimator;
 
 public static class BoneNameHelpers

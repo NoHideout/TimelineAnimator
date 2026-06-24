@@ -1,3 +1,4 @@
+using System;
 using Dalamud.Bindings.ImGui;
 using System.Numerics;
 using TimelineAnimator.Data;

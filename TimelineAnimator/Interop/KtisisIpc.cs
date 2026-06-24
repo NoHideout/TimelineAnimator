@@ -1,7 +1,10 @@
+using System;
+using System.Collections.Generic;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Ipc;
 using Dalamud.Plugin.Services;
 using System.Numerics;
+using System.Threading.Tasks;
 
 namespace TimelineAnimator.Interop;
 
