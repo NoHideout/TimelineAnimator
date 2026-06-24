@@ -1,17 +1,18 @@
-namespace TimelineAnimator.Data;
-
-public class Constants
+namespace TimelineAnimator.Data
 {
-    public static class TrackNames
+    public class Constants
     {
-        public const string CameraPosition = "Camera Position";
-        public const string CameraRotation = "Camera Rotation";
-        public const string CameraFOV = "Camera FOV";
-    }
+        public static class TrackNames
+        {
+            public const string CameraPosition = "Camera Position";
+            public const string CameraRotation = "Camera Rotation";
+            public const string CameraFOV = "Camera FOV";
+        }
 
-    public static class FileFormat
-    {
-        public const string Signature = "XIVANIM";
-        public const int Version = 3;
+        public static class FileFormat
+        {
+            public const string Signature = "XIVANIM";
+            public const int Version = 3;
+        }
     }
 }

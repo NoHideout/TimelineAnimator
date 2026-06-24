@@ -35,6 +35,7 @@ namespace TimelineAnimator.Sequencers
         public int GetSelectedKeyframeCount() => State.SelectedKeyframes.Count;
 
         public ITrackKeyframe? GetFirstSelectedKeyframe() => GetSelectedKeyframes().FirstOrDefault();
+        
         public void DeleteSelectedKeyframes()
         {
             var selectedIds = State.SelectedKeyframes.Select(sk => sk.keyframeId).ToHashSet();
@@ -155,11 +156,12 @@ namespace TimelineAnimator.Sequencers
                             foreach (var copiedKeyframe in group)
                             {
                                 int newFrame = pasteFrame + (copiedKeyframe.Keyframe.Frame - blockCenterFrame);
-                                targetTrack.PasteKeyframe(newFrame, copiedKeyframe.Keyframe); 
+                                targetTrack.PasteKeyframe(newFrame, copiedKeyframe.Keyframe);
                             }
                         }
                     }
                 }
+
                 ImGui.CloseCurrentPopup();
             }
 
@@ -174,12 +176,14 @@ namespace TimelineAnimator.Sequencers
                     {
                         Sequence.GetTrack(sk.trackIndex)?.DeleteKeyframe(sk.keyframeId);
                     }
+
                     State.SelectedKeyframes.Clear();
                 }
                 else if (contextKf != null)
                 {
                     Sequence.GetTrack(State.contextTrackIndex)?.DeleteKeyframe(contextKf.Id);
                 }
+
                 ImGui.CloseCurrentPopup();
             }
 
@@ -188,8 +192,6 @@ namespace TimelineAnimator.Sequencers
             DrawAdditionalContextMenus(modifierHeld, ref sharedSelectedEntry);
         }
 
-        protected virtual void DrawAdditionalContextMenus(bool modifierHeld, ref int sharedSelectedEntry)
-        {
-        }
+        protected virtual void DrawAdditionalContextMenus(bool modifierHeld, ref int sharedSelectedEntry) { }
     }
 }

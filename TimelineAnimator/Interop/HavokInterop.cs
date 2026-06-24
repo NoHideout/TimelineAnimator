@@ -4,66 +4,67 @@ using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Scene;
 using TimelineAnimator.Data;
 
-namespace TimelineAnimator.Interop;
-
-public static unsafe class HavokInterop
+namespace TimelineAnimator.Interop
 {
-    public static Dictionary<string, (TransformState Transform, string ParentName)> GetNativeBones(
-        nint gameObjectAddress)
+    public static unsafe class HavokInterop
     {
-        var result = new Dictionary<string, (TransformState, string)>();
-
-        var gameObj = (GameObject*)gameObjectAddress;
-        if (gameObj == null || gameObj->DrawObject == null) return result;
-
-        var charaBase = (CharacterBase*)gameObj->DrawObject;
-        if (charaBase == null || charaBase->Skeleton == null) return result;
-
-        var skeleton = charaBase->Skeleton;
-
-        for (int i = 0; i < skeleton->PartialSkeletonCount; i++)
+        public static Dictionary<string, (TransformState Transform, string ParentName)> GetNativeBones(
+            nint gameObjectAddress)
         {
-            var partialSk = &skeleton->PartialSkeletons[i];
-            var havokPose = partialSk->GetHavokPose(0);
+            var result = new Dictionary<string, (TransformState, string)>();
 
-            if (havokPose == null || havokPose->Skeleton == null) continue;
+            var gameObj = (GameObject*)gameObjectAddress;
+            if (gameObj == null || gameObj->DrawObject == null) return result;
 
-            var hkaSkeleton = havokPose->Skeleton;
+            var charaBase = (CharacterBase*)gameObj->DrawObject;
+            if (charaBase == null || charaBase->Skeleton == null) return result;
 
-            var localTransforms = havokPose->LocalPose.Data;
-            var modelTransforms = havokPose->ModelPose.Data;
+            var skeleton = charaBase->Skeleton;
 
-            var parentIndices = hkaSkeleton->ParentIndices.Data;
-
-            for (int b = 0; b < hkaSkeleton->Bones.Length; b++)
+            for (int i = 0; i < skeleton->PartialSkeletonCount; i++)
             {
-                string boneName = hkaSkeleton->Bones[b].Name.String.Trim();
-                if (result.ContainsKey(boneName)) continue;
+                var partialSk = &skeleton->PartialSkeletons[i];
+                var havokPose = partialSk->GetHavokPose(0);
 
-                var localTrans = localTransforms[b];
-                var modelTrans = modelTransforms[b];
+                if (havokPose == null || havokPose->Skeleton == null) continue;
 
-                string parentName = string.Empty;
-                short parentIndex = parentIndices[b];
-                if (parentIndex >= 0 && parentIndex < hkaSkeleton->Bones.Length)
+                var hkaSkeleton = havokPose->Skeleton;
+
+                var localTransforms = havokPose->LocalPose.Data;
+                var modelTransforms = havokPose->ModelPose.Data;
+
+                var parentIndices = hkaSkeleton->ParentIndices.Data;
+
+                for (int b = 0; b < hkaSkeleton->Bones.Length; b++)
                 {
-                    parentName = hkaSkeleton->Bones[parentIndex].Name.String.Trim();
+                    string boneName = hkaSkeleton->Bones[b].Name.String.Trim();
+                    if (result.ContainsKey(boneName)) continue;
+
+                    var localTrans = localTransforms[b];
+                    var modelTrans = modelTransforms[b];
+
+                    string parentName = string.Empty;
+                    short parentIndex = parentIndices[b];
+                    if (parentIndex >= 0 && parentIndex < hkaSkeleton->Bones.Length)
+                    {
+                        parentName = hkaSkeleton->Bones[parentIndex].Name.String.Trim();
+                    }
+
+                    var transformState = new TransformState
+                    {
+                        Position =
+                            new Vector3(localTrans.Translation.X, localTrans.Translation.Y, localTrans.Translation.Z),
+                        Rotation = new Quaternion(localTrans.Rotation.X, localTrans.Rotation.Y, localTrans.Rotation.Z,
+                            localTrans.Rotation.W),
+                        Scale = new Vector3(modelTrans.Scale.X, modelTrans.Scale.Y, modelTrans.Scale.Z),
+                        FieldOfView = 0.785398f
+                    };
+
+                    result[boneName] = (transformState, parentName);
                 }
-
-                var transformState = new TransformState
-                {
-                    Position =
-                        new Vector3(localTrans.Translation.X, localTrans.Translation.Y, localTrans.Translation.Z),
-                    Rotation = new Quaternion(localTrans.Rotation.X, localTrans.Rotation.Y, localTrans.Rotation.Z,
-                        localTrans.Rotation.W),
-                    Scale = new Vector3(modelTrans.Scale.X, modelTrans.Scale.Y, modelTrans.Scale.Z),
-                    FieldOfView = 0.785398f
-                };
-
-                result[boneName] = (transformState, parentName);
             }
-        }
 
-        return result;
+            return result;
+        }
     }
 }

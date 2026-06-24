@@ -2,37 +2,38 @@ using System;
 using System.Collections.Generic;
 using TimelineAnimator.Data;
 
-namespace TimelineAnimator;
-
-public static class Clipboard
+namespace TimelineAnimator
 {
-    public class CopiedKeyframe
+    public static class Clipboard
     {
-        public ITrackKeyframe Keyframe { get; }
-        public int TrackIndex { get; }
-
-        public CopiedKeyframe(ITrackKeyframe keyframe, int trackIndex)
+        public class CopiedKeyframe
         {
-            Keyframe = keyframe;
-            TrackIndex = trackIndex;
-        }
-    }
+            public ITrackKeyframe Keyframe { get; }
+            public int TrackIndex { get; }
 
-    private static List<CopiedKeyframe> data = new();
-
-    public static bool HasData => data.Count > 0;
-
-    public static void Copy(List<ITrackKeyframe> keyframes, Dictionary<Guid, int> trackMap)
-    {
-        data.Clear();
-        foreach (var kf in keyframes)
-        {
-            if (trackMap.TryGetValue(kf.Id, out var trackIndex))
+            public CopiedKeyframe(ITrackKeyframe keyframe, int trackIndex)
             {
-                data.Add(new CopiedKeyframe(kf, trackIndex));
+                Keyframe = keyframe;
+                TrackIndex = trackIndex;
             }
         }
-    }
 
-    public static List<CopiedKeyframe> GetKeyframesForPasting() => data;
+        private static List<CopiedKeyframe> data = new();
+
+        public static bool HasData => data.Count > 0;
+
+        public static void Copy(List<ITrackKeyframe> keyframes, Dictionary<Guid, int> trackMap)
+        {
+            data.Clear();
+            foreach (var kf in keyframes)
+            {
+                if (trackMap.TryGetValue(kf.Id, out var trackIndex))
+                {
+                    data.Add(new CopiedKeyframe(kf, trackIndex));
+                }
+            }
+        }
+
+        public static List<CopiedKeyframe> GetKeyframesForPasting() => data;
+    }
 }

@@ -210,13 +210,13 @@ namespace TimelineAnimator.Sequencers
             if (Math.Abs(sinp) >= 1) angles.X = (float)Math.CopySign(Math.PI / 2, sinp);
             else angles.X = (float)Math.Asin(sinp);
 
-            float siny_cosp = 2 * (q.W * q.Y + q.X * q.Z);
-            float cosy_cosp = 1 - 2 * (q.X * q.X + q.Y * q.Y);
-            angles.Y = (float)Math.Atan2(siny_cosp, cosy_cosp);
+            float sinyCosp = 2 * (q.W * q.Y + q.X * q.Z);
+            float cosyCosp = 1 - 2 * (q.X * q.X + q.Y * q.Y);
+            angles.Y = (float)Math.Atan2(sinyCosp, cosyCosp);
 
-            float sinr_cosp = 2 * (q.W * q.Z + q.X * q.Y);
-            float cosr_cosp = 1 - 2 * (q.X * q.X + q.Z * q.Z);
-            angles.Z = (float)Math.Atan2(sinr_cosp, cosr_cosp);
+            float sinrCosp = 2 * (q.W * q.Z + q.X * q.Y);
+            float cosrCosp = 1 - 2 * (q.X * q.X + q.Z * q.Z);
+            angles.Z = (float)Math.Atan2(sinrCosp, cosrCosp);
             return angles;
         }
 
