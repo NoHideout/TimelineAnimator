@@ -42,7 +42,7 @@ namespace TimelineAnimator.Data
         }
     }
 
-    public enum TrackType { Transform, Float, Vector3, Quaternion}
+    public enum TrackType { Transform, Float, Vector3, Quaternion, Folder}
 
     public interface ITrackKeyframe
     {
@@ -75,7 +75,7 @@ namespace TimelineAnimator.Data
     public abstract class TimelineTrack
     {
         public string Name { get; private set; }
-        public string DisplayName { get; private set; }
+        public string DisplayName { get; set; }
         public string ParentName { get; set; } = String.Empty;
         public int Depth { get; set; } = 0;
         public bool IsExpanded { get; set; } = true;
@@ -130,6 +130,15 @@ namespace TimelineAnimator.Data
         }
     }
 
+    public class FolderTrack : TimelineTrack
+    {
+        public FolderTrack(string name) : base(name, TrackType.Folder) { }
+
+        public override void DeleteKeyframe(Guid keyframeId) { }
+        public override IEnumerable<ITrackKeyframe> GetUntypedKeyframes() => Array.Empty<ITrackKeyframe>();
+        public override void PasteKeyframe(int newFrame, ITrackKeyframe sourceKeyframe) { }
+    }
+    
     public class TimelineSequence
     {
         public List<TimelineTrack> Tracks { get; set; } = new();

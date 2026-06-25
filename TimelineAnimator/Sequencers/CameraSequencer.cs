@@ -21,24 +21,24 @@ namespace TimelineAnimator.Sequencers
 
         public CameraSequencer()
         {
-            Sequence.AddTrack<TransformState>(Constants.TrackNames.CameraPosition, TrackType.Transform);
-            Sequence.AddTrack<TransformState>(Constants.TrackNames.CameraRotation, TrackType.Transform);
-            Sequence.AddTrack<TransformState>(Constants.TrackNames.CameraFOV, TrackType.Transform);
+            var camFolder = new FolderTrack("Camera") { DisplayName = "Camera" };
+            Sequence.Tracks.Add(camFolder);
+            
+            var posTrack = Sequence.AddTrack<Vector3>(Constants.TrackNames.CameraPosition, TrackType.Vector3);
+            posTrack.ParentName = "Camera"; posTrack.DisplayName = "Position";
+            var rotTrack = Sequence.AddTrack<Quaternion>(Constants.TrackNames.CameraRotation, TrackType.Quaternion);
+            rotTrack.ParentName = "Camera"; rotTrack.DisplayName = "Rotation";
+            var fovTrack = Sequence.AddTrack<float>(Constants.TrackNames.CameraFOV, TrackType.Float);
+            fovTrack.ParentName = "Camera"; fovTrack.DisplayName = "Field of View";
 
             var camState = Services.CameraService.GetCurrentCameraState();
-
-            var defaultTransform = new TransformState
-            {
-                Position = new Vector3(camState.Position.X, camState.Position.Y, camState.Position.Z),
-                Rotation = new Quaternion(camState.Rotation.X, camState.Rotation.Y, camState.Rotation.Z,
-                    camState.Rotation.W),
-                Scale = new Vector3(1, 1, 1),
-                FieldOfView = camState.FoV
-            };
-
-            DefaultPose[Constants.TrackNames.CameraPosition] = defaultTransform;
-            DefaultPose[Constants.TrackNames.CameraRotation] = defaultTransform;
-            DefaultPose[Constants.TrackNames.CameraFOV] = defaultTransform;
+            
+            DefaultPose["Camera"] = TransformState.Identity;
+            posTrack.AddKeyframe(0, camState.Position);
+            rotTrack.AddKeyframe(0, camState.Rotation);
+            fovTrack.AddKeyframe(0, camState.FoV);
+            
+            RebuildHierarchy();
         }
 
         public override void Draw(ImSequencerCore uiCore, ref int currentFrame, ref int selectedEntry,
@@ -62,24 +62,18 @@ namespace TimelineAnimator.Sequencers
         {
             if (!Services.CameraService.IsOverridden) return;
 
-            string[] trackNames = { "Camera Position", "Camera Rotation", "Camera FOV" };
+            var posTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraPosition) as TimelineTrack<Vector3>;
+            var rotTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraRotation) as TimelineTrack<Quaternion>;
+            var fovTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraFOV) as TimelineTrack<float>;
 
-            foreach (var trackName in trackNames)
-            {
-                if (Sequence.GetTrackByName(trackName) is TimelineTrack<TransformState> track)
-                {
-                    var transformState = new TransformState
-                    {
-                        Position = position,
-                        Rotation = rotation,
-                        Scale = Vector3.One,
-                        FieldOfView = fov
-                    };
+            posTrack?.Keyframes.RemoveAll(k => k.Frame == frame);
+            posTrack?.AddKeyframe(frame, position);
 
-                    track.Keyframes.RemoveAll(k => k.Frame == frame);
-                    track.AddKeyframe(frame, transformState);
-                }
-            }
+            rotTrack?.Keyframes.RemoveAll(k => k.Frame == frame);
+            rotTrack?.AddKeyframe(frame, rotation);
+
+            fovTrack?.Keyframes.RemoveAll(k => k.Frame == frame);
+            fovTrack?.AddKeyframe(frame, fov);
         }
 
         public override void DrawInspector(int currentFrame)
@@ -135,17 +129,13 @@ namespace TimelineAnimator.Sequencers
         {
             if (!Services.CameraService.IsOverridden) return;
 
-            var posTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraPosition) as TimelineTrack<TransformState>;
-            var rotTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraRotation) as TimelineTrack<TransformState>;
-            var fovTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraFOV) as TimelineTrack<TransformState>;
+            var posTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraPosition) as TimelineTrack<Vector3>;
+            var rotTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraRotation) as TimelineTrack<Quaternion>;
+            var fovTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraFOV) as TimelineTrack<float>;
 
-            var posTransform = posTrack != null ? AnimationHelpers.GetInterpolatedTransform(this, posTrack, frame) : null;
-            var rotTransform = rotTrack != null ? AnimationHelpers.GetInterpolatedTransform(this, rotTrack, frame) : null;
-            var fovTransform = fovTrack != null ? AnimationHelpers.GetInterpolatedTransform(this, fovTrack, frame) : null;
-
-            position = posTransform != null ? posTransform.Value.Position : position;
-            rotation = rotTransform != null ? rotTransform.Value.Rotation : rotation;
-            fov = fovTransform != null ? fovTransform.Value.FieldOfView : fov;
+            position = posTrack != null ? AnimationHelpers.GetInterpolatedVector3(posTrack, frame, position) ?? position : position;
+            rotation = rotTrack != null ? AnimationHelpers.GetInterpolatedQuaternion(rotTrack, frame, rotation) ?? rotation : rotation;
+            fov = fovTrack != null ? AnimationHelpers.GetInterpolatedFloat(fovTrack, frame, fov) : fov;
 
             eulerAngles = ToEulerAngles(rotation);
 
@@ -223,16 +213,31 @@ namespace TimelineAnimator.Sequencers
         public override void RebuildHierarchy()
         {
             var sorted = new List<TimelineTrack>();
-
-            var posTrack = Sequence.GetTrackByName("Camera Position");
-            if (posTrack != null) sorted.Add(posTrack);
-
-            var rotTrack = Sequence.GetTrackByName("Camera Rotation");
-            if (rotTrack != null) sorted.Add(rotTrack);
-
-            var fovTrack = Sequence.GetTrackByName("Camera FOV");
-            if (fovTrack != null) sorted.Add(fovTrack);
-
+            var camFolder = Sequence.GetTrackByName("Camera");
+            if (camFolder != null)
+            {
+                camFolder.Depth = 0;
+                camFolder.HasChildren = true;
+                sorted.Add(camFolder);
+            }
+            var posTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraPosition);
+            if (posTrack != null) 
+            { 
+                posTrack.Depth = 1; 
+                sorted.Add(posTrack); 
+            }
+            var rotTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraRotation);
+            if (rotTrack != null) 
+            { 
+                rotTrack.Depth = 1; 
+                sorted.Add(rotTrack); 
+            }
+            var fovTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraFOV);
+            if (fovTrack != null) 
+            { 
+                fovTrack.Depth = 1; 
+                sorted.Add(fovTrack); 
+            }
             Sequence.Tracks = sorted;
         }
     }

@@ -60,6 +60,45 @@ namespace TimelineAnimator
             return TransformState.Lerp(kfA.Value, kfB.Value, t);
         }
 
+        public static Vector3? GetInterpolatedVector3(TimelineTrack<Vector3> track, int currentFrame, Vector3 defaultValue)
+        {
+            if (!TryGetInterpolationState(track, currentFrame, out var kfA, out var kfB, out var t)) return null;
+
+            if (kfA == kfB && currentFrame < kfA.Frame)
+            {
+                float introT = (float)currentFrame / kfA.Frame;
+                return Vector3.Lerp(defaultValue, kfA.Value, GetEasedT(introT, kfA));
+            }
+            return Vector3.Lerp(kfA.Value, kfB.Value, t);
+        }
+
+        public static Quaternion? GetInterpolatedQuaternion(TimelineTrack<Quaternion> track, int currentFrame, Quaternion defaultValue)
+        {
+            if (!TryGetInterpolationState(track, currentFrame, out var kfA, out var kfB, out var t)) return null;
+
+            if (kfA == kfB && currentFrame < kfA.Frame)
+            {
+                float introT = (float)currentFrame / kfA.Frame;
+                float dotIntro = Quaternion.Dot(defaultValue, kfA.Value);
+                var bRotIntro = dotIntro < 0.0f ? new Quaternion(-kfA.Value.X, -kfA.Value.Y, -kfA.Value.Z, -kfA.Value.W) : kfA.Value;
+                return Quaternion.Slerp(defaultValue, bRotIntro, GetEasedT(introT, kfA));
+            }
+
+            float dot = Quaternion.Dot(kfA.Value, kfB.Value);
+            var bRot = dot < 0.0f ? new Quaternion(-kfB.Value.X, -kfB.Value.Y, -kfB.Value.Z, -kfB.Value.W) : kfB.Value;
+            return Quaternion.Slerp(kfA.Value, bRot, t);
+        }
+
+        public static float GetInterpolatedFloat(TimelineTrack<float> track, int frame, float defaultVal)
+        {
+            if (AnimationHelpers.TryGetInterpolationState(track, frame, out var kfA, out var kfB, out var t))
+            {
+                if (kfA == kfB && frame < kfA.Frame) return defaultVal;
+                return kfA.Value + (kfB.Value - kfA.Value) * t;
+            }
+            return defaultVal;
+        }
+        
         private static TransformState? GetDefaultTransform(ISequencer sequencer, string boneName)
         {
             if (sequencer.DefaultPose.TryGetValue(boneName, out var state)) return state;

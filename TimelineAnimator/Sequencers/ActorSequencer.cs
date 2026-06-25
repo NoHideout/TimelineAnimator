@@ -23,23 +23,28 @@ namespace TimelineAnimator.Sequencers
         {
             var matrices = new Dictionary<string, Matrix4x4>();
 
-            foreach (var abstractTrack in Sequence.Tracks)
+            foreach (var folderTrack in Sequence.Tracks.OfType<FolderTrack>())
             {
-                if (abstractTrack is TimelineTrack<TransformState> track)
-                {
-                    var transform = AnimationHelpers.GetInterpolatedTransform(this, track, frame);
-                    if (transform != null)
-                    {
-                        var pos = transform.Value.Position;
-                        var rot = transform.Value.Rotation;
-                        var scale = transform.Value.Scale;
+                string boneName = folderTrack.Name;
+                if (!DefaultPose.TryGetValue(boneName, out var defaultState)) continue;
 
-                        matrices[track.Name] = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(rot) * Matrix4x4.CreateTranslation(pos);
-                    }
-                }
+                var posTrack = Sequence.GetTrackByName($"{boneName}_Position") as TimelineTrack<Vector3>;
+                var rotTrack = Sequence.GetTrackByName($"{boneName}_Rotation") as TimelineTrack<Quaternion>;
+                var scaleTrack = Sequence.GetTrackByName($"{boneName}_Scale") as TimelineTrack<Vector3>;
+
+                if (posTrack == null || rotTrack == null || scaleTrack == null) continue;
+
+                var pos = AnimationHelpers.GetInterpolatedVector3(posTrack, frame, defaultState.Position) ?? defaultState.Position;
+                var rot = AnimationHelpers.GetInterpolatedQuaternion(rotTrack, frame, defaultState.Rotation) ?? defaultState.Rotation;
+                var scale = AnimationHelpers.GetInterpolatedVector3(scaleTrack, frame, defaultState.Scale) ?? defaultState.Scale;
+
+                matrices[boneName] = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(rot) * Matrix4x4.CreateTranslation(pos);
             }
 
-            if (matrices.Count > 0) _ = Services.KtisisIpc.SendAnimationFrame(ActorIndex, matrices);
+            if (matrices.Count > 0)
+            {
+                _ = Services.KtisisIpc.SendAnimationFrame(ActorIndex, matrices);
+            }
         }
 
         public override void RebuildHierarchy()
@@ -83,13 +88,21 @@ namespace TimelineAnimator.Sequencers
                 sorted.Add(node);
                 if (childrenMap.TryGetValue(node.Name, out var children))
                 {
-                    foreach (var child in children.OrderBy(c => c.Name)) AddNode(child, depth + 1);
+                    var sortedChildren = children
+                        .OrderBy(c => c is FolderTrack ? 1 : 0)
+                        .ThenBy(c => c.Name);
+
+                    foreach (var child in sortedChildren) AddNode(child, depth + 1);
                 }
             }
 
             if (childrenMap.TryGetValue(string.Empty, out var roots))
             {
-                foreach (var root in roots.OrderBy(t => t.Name)) AddNode(root, 0);
+                var sortedRoots = roots
+                    .OrderBy(t => t is FolderTrack ? 1 : 0)
+                    .ThenBy(t => t.Name);
+                    
+                foreach (var root in sortedRoots) AddNode(root, 0);
             }
 
             Sequence.Tracks = sorted;
