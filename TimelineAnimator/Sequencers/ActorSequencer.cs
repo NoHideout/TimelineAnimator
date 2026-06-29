@@ -47,67 +47,6 @@ namespace TimelineAnimator.Sequencers
             }
         }
 
-        public override void RebuildHierarchy()
-        {
-            var sorted = new List<TimelineTrack>();
-            var trackDict = Sequence.Tracks.ToDictionary(t => t.Name);
-            var childrenMap = new Dictionary<string, List<TimelineTrack>>();
-
-            string GetEffectiveParent(string boneName)
-            {
-                string current = boneName;
-                int maxDepth = 100;
-                while (maxDepth-- > 0 && FullSkeletonHierarchy.TryGetValue(current, out var parent) &&
-                       !string.IsNullOrEmpty(parent))
-                {
-                    if (trackDict.ContainsKey(parent)) return parent;
-                    current = parent;
-                }
-
-                var track = Sequence.GetTrackByName(boneName);
-                if (track != null && !string.IsNullOrEmpty(track.ParentName) && trackDict.ContainsKey(track.ParentName))
-                    return track.ParentName;
-
-                return string.Empty;
-            }
-
-            foreach (var t in Sequence.Tracks)
-            {
-                string effectiveParent = GetEffectiveParent(t.Name);
-                t.ParentName = effectiveParent;
-
-                if (!childrenMap.ContainsKey(effectiveParent)) childrenMap[effectiveParent] = new List<TimelineTrack>();
-                childrenMap[effectiveParent].Add(t);
-            }
-
-            foreach (var t in Sequence.Tracks) t.HasChildren = childrenMap.ContainsKey(t.Name);
-
-            void AddNode(TimelineTrack node, int depth)
-            {
-                node.Depth = depth;
-                sorted.Add(node);
-                if (childrenMap.TryGetValue(node.Name, out var children))
-                {
-                    var sortedChildren = children
-                        .OrderBy(c => c is FolderTrack ? 1 : 0)
-                        .ThenBy(c => c.Name);
-
-                    foreach (var child in sortedChildren) AddNode(child, depth + 1);
-                }
-            }
-
-            if (childrenMap.TryGetValue(string.Empty, out var roots))
-            {
-                var sortedRoots = roots
-                    .OrderBy(t => t is FolderTrack ? 1 : 0)
-                    .ThenBy(t => t.Name);
-                    
-                foreach (var root in sortedRoots) AddNode(root, 0);
-            }
-
-            Sequence.Tracks = sorted;
-        }
-
         public override void DrawInspector(int currentFrame)
         {
         }
@@ -138,6 +77,33 @@ namespace TimelineAnimator.Sequencers
             {
                 ImGui.SetTooltip($"Hold {Services.Configuration.ModifierKey} to delete this track.");
             }
+        }
+        public override void RebuildHierarchy()
+        {
+            foreach (var track in Sequence.Tracks)
+            {
+                if (track is FolderTrack && FullSkeletonHierarchy.TryGetValue(track.Name, out var trueParent))
+                {
+                    track.ParentName = trueParent;
+                }
+            }
+
+            var existingTrackNames = Sequence.Tracks.Select(t => t.Name).ToHashSet();
+
+            foreach (var track in Sequence.Tracks)
+            {
+                if (track is FolderTrack)
+                {
+                    string p = track.ParentName;
+                    while (!string.IsNullOrEmpty(p) && !existingTrackNames.Contains(p))
+                    {
+                        if (FullSkeletonHierarchy.TryGetValue(p, out var grandParent)) p = grandParent;
+                        else p = string.Empty;
+                    }
+                    track.ParentName = p;
+                }
+            }
+            base.RebuildHierarchy();
         }
     }
 }

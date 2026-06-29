@@ -16,7 +16,6 @@ namespace TimelineAnimator.Sequencers
         public bool IsVisible { get; set; } = true;
         public abstract void ApplyPose(int frame);
         public abstract void DrawInspector(int currentFrame);
-        public abstract void RebuildHierarchy();
 
         public virtual void Draw(ImSequencerCore uiCore, ref int currentFrame, ref int selectedEntry, bool modifierHeld)
         {
@@ -58,22 +57,27 @@ namespace TimelineAnimator.Sequencers
             var trackToDelete = Sequence.Tracks[index];
             var parentOfDeleted = trackToDelete.ParentName;
 
+            var tracksToRemove = new HashSet<TimelineTrack> { trackToDelete };
+
             foreach (var t in Sequence.Tracks)
             {
-                if (t.ParentName == trackToDelete.Name) t.ParentName = parentOfDeleted;
+                if (t.ParentName == trackToDelete.Name)
+                {
+                    if (t is not FolderTrack)
+                    {
+                        tracksToRemove.Add(t);
+                    }
+                    else
+                    {
+                        t.ParentName = parentOfDeleted;
+                    }
+                }
             }
+            
+            Sequence.Tracks.RemoveAll(t => tracksToRemove.Contains(t));
+            State.SelectedKeyframes.Clear();
+            State.contextKeyframe = null;
 
-            Sequence.RemoveTrack(index);
-
-            var updatedSelection = new HashSet<SelectedKeyframe>();
-            foreach (var sk in State.SelectedKeyframes)
-            {
-                if (sk.trackIndex < index) updatedSelection.Add(sk);
-                else if (sk.trackIndex > index)
-                    updatedSelection.Add(new SelectedKeyframe(sk.trackIndex - 1, sk.keyframeId));
-            }
-
-            State.SelectedKeyframes = updatedSelection;
             RebuildHierarchy();
         }
 
@@ -193,5 +197,44 @@ namespace TimelineAnimator.Sequencers
         }
 
         protected virtual void DrawAdditionalContextMenus(bool modifierHeld, ref int sharedSelectedEntry) { }
+        
+        public virtual void RebuildHierarchy()
+        {
+            var sorted = new List<TimelineTrack>();
+            var childrenMap = new Dictionary<string, List<TimelineTrack>>();
+            
+            foreach (var t in Sequence.Tracks)
+            {
+                var p = t.ParentName ?? string.Empty;
+                if (!childrenMap.ContainsKey(p)) childrenMap[p] = new();
+                childrenMap[p].Add(t);
+            }
+
+            void AddNode(TimelineTrack node, int depth)
+            {
+                node.Depth = depth;
+                node.HasChildren = childrenMap.ContainsKey(node.Name) && childrenMap[node.Name].Any();
+                sorted.Add(node);
+                if (childrenMap.TryGetValue(node.Name, out var children))
+                {
+                    var sortedChildren = children
+                        .OrderBy(c => c is FolderTrack ? 1 : 0)
+                        .ThenBy(c => c.Name);
+
+                    foreach (var child in sortedChildren) AddNode(child, depth + 1);
+                }
+            }
+
+            if (childrenMap.TryGetValue(string.Empty, out var roots))
+            {
+                var sortedRoots = roots
+                    .OrderBy(t => t is FolderTrack ? 1 : 0)
+                    .ThenBy(t => t.Name);
+                    
+                foreach (var root in sortedRoots) AddNode(root, 0);
+            }
+
+            Sequence.Tracks = sorted;
+        }
     }
 }

@@ -55,7 +55,7 @@ namespace TimelineAnimator.Windows
                 ImGui.BeginChild("InspectorPanel", new Vector2(inspectorWidth, remainingHeight), true);
                 ImGui.PushItemWidth(ImGui.GetContentRegionAvail().X);
 
-                InspectorPanel.Draw(plugin);
+                InspectorPanel.Draw();
 
                 ImGui.PopItemWidth();
                 ImGui.EndChild();

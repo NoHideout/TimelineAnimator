@@ -85,17 +85,22 @@ namespace TimelineAnimator.Core
                             folder.ParentName = parentName;
                             
                             var pT = targetSequencer.Sequence.GetTrackByName($"{TrackName}_Position") as TimelineTrack<Vector3>;
+                            if (pT == null) { pT = targetSequencer.Sequence.AddTrack<Vector3>($"{TrackName}_Position", TrackType.Vector3); pT.ParentName = TrackName; pT.DisplayName = "Position"; }
+
                             var rT = targetSequencer.Sequence.GetTrackByName($"{TrackName}_Rotation") as TimelineTrack<Quaternion>;
+                            if (rT == null) { rT = targetSequencer.Sequence.AddTrack<Quaternion>($"{TrackName}_Rotation", TrackType.Quaternion); rT.ParentName = TrackName; rT.DisplayName = "Rotation"; }
+
                             var sT = targetSequencer.Sequence.GetTrackByName($"{TrackName}_Scale") as TimelineTrack<Vector3>;
+                            if (sT == null) { sT = targetSequencer.Sequence.AddTrack<Vector3>($"{TrackName}_Scale", TrackType.Vector3); sT.ParentName = TrackName; sT.DisplayName = "Scale"; }
 
-                            var kfPos = pT?.Keyframes.FirstOrDefault(k => k.Frame == playback.CurrentFrame);
-                            if (kfPos == null) pT?.AddKeyframe(playback.CurrentFrame, boneTransform.Position); else kfPos.Value = boneTransform.Position;
+                            var kfPos = pT.Keyframes.FirstOrDefault(k => k.Frame == playback.CurrentFrame);
+                            if (kfPos == null) pT.AddKeyframe(playback.CurrentFrame, boneTransform.Position); else kfPos.Value = boneTransform.Position;
 
-                            var kfRot = rT?.Keyframes.FirstOrDefault(k => k.Frame == playback.CurrentFrame);
-                            if (kfRot == null) rT?.AddKeyframe(playback.CurrentFrame, boneTransform.Rotation); else kfRot.Value = boneTransform.Rotation;
+                            var kfRot = rT.Keyframes.FirstOrDefault(k => k.Frame == playback.CurrentFrame);
+                            if (kfRot == null) rT.AddKeyframe(playback.CurrentFrame, boneTransform.Rotation); else kfRot.Value = boneTransform.Rotation;
 
-                            var kfScale = sT?.Keyframes.FirstOrDefault(k => k.Frame == playback.CurrentFrame);
-                            if (kfScale == null) sT?.AddKeyframe(playback.CurrentFrame, boneTransform.Scale); else kfScale.Value = boneTransform.Scale;
+                            var kfScale = sT.Keyframes.FirstOrDefault(k => k.Frame == playback.CurrentFrame);
+                            if (kfScale == null) sT.AddKeyframe(playback.CurrentFrame, boneTransform.Scale); else kfScale.Value = boneTransform.Scale;
                         }
                     }
                     

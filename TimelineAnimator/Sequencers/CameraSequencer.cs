@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Keys;
@@ -24,20 +24,29 @@ namespace TimelineAnimator.Sequencers
             var camFolder = new FolderTrack("Camera") { DisplayName = "Camera" };
             Sequence.Tracks.Add(camFolder);
             
-            var posTrack = Sequence.AddTrack<Vector3>(Constants.TrackNames.CameraPosition, TrackType.Vector3);
+            var posTrack = Sequence.AddTrack<Vector3>("Camera_Position", TrackType.Vector3);
             posTrack.ParentName = "Camera"; posTrack.DisplayName = "Position";
-            var rotTrack = Sequence.AddTrack<Quaternion>(Constants.TrackNames.CameraRotation, TrackType.Quaternion);
+            
+            var rotTrack = Sequence.AddTrack<Quaternion>("Camera_Rotation", TrackType.Quaternion);
             rotTrack.ParentName = "Camera"; rotTrack.DisplayName = "Rotation";
-            var fovTrack = Sequence.AddTrack<float>(Constants.TrackNames.CameraFOV, TrackType.Float);
+            
+            var fovTrack = Sequence.AddTrack<float>("Camera_FOV", TrackType.Float);
             fovTrack.ParentName = "Camera"; fovTrack.DisplayName = "Field of View";
 
             var camState = Services.CameraService.GetCurrentCameraState();
             
-            DefaultPose["Camera"] = TransformState.Identity;
+            DefaultPose["Camera"] = new TransformState
+            {
+                Position = camState.Position,
+                Rotation = camState.Rotation,
+                Scale = Vector3.One,
+                FieldOfView = camState.FoV
+            };
+
             posTrack.AddKeyframe(0, camState.Position);
             rotTrack.AddKeyframe(0, camState.Rotation);
             fovTrack.AddKeyframe(0, camState.FoV);
-            
+
             RebuildHierarchy();
         }
 
@@ -62,18 +71,25 @@ namespace TimelineAnimator.Sequencers
         {
             if (!Services.CameraService.IsOverridden) return;
 
-            var posTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraPosition) as TimelineTrack<Vector3>;
-            var rotTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraRotation) as TimelineTrack<Quaternion>;
-            var fovTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraFOV) as TimelineTrack<float>;
+            var posTrack = Sequence.GetTrackByName("Camera_Position") as TimelineTrack<Vector3>;
+            if (posTrack == null) { posTrack = Sequence.AddTrack<Vector3>("Camera_Position", TrackType.Vector3); posTrack.ParentName = "Camera"; posTrack.DisplayName = "Position"; }
 
-            posTrack?.Keyframes.RemoveAll(k => k.Frame == frame);
-            posTrack?.AddKeyframe(frame, position);
+            var rotTrack = Sequence.GetTrackByName("Camera_Rotation") as TimelineTrack<Quaternion>;
+            if (rotTrack == null) { rotTrack = Sequence.AddTrack<Quaternion>("Camera_Rotation", TrackType.Quaternion); rotTrack.ParentName = "Camera"; rotTrack.DisplayName = "Rotation"; }
 
-            rotTrack?.Keyframes.RemoveAll(k => k.Frame == frame);
-            rotTrack?.AddKeyframe(frame, rotation);
+            var fovTrack = Sequence.GetTrackByName("Camera_FOV") as TimelineTrack<float>;
+            if (fovTrack == null) { fovTrack = Sequence.AddTrack<float>("Camera_FOV", TrackType.Float); fovTrack.ParentName = "Camera"; fovTrack.DisplayName = "Field of View"; }
 
-            fovTrack?.Keyframes.RemoveAll(k => k.Frame == frame);
-            fovTrack?.AddKeyframe(frame, fov);
+            posTrack.Keyframes.RemoveAll(k => k.Frame == frame);
+            posTrack.AddKeyframe(frame, position);
+
+            rotTrack.Keyframes.RemoveAll(k => k.Frame == frame);
+            rotTrack.AddKeyframe(frame, rotation);
+
+            fovTrack.Keyframes.RemoveAll(k => k.Frame == frame);
+            fovTrack.AddKeyframe(frame, fov);
+
+            RebuildHierarchy();
         }
 
         public override void DrawInspector(int currentFrame)
@@ -129,13 +145,19 @@ namespace TimelineAnimator.Sequencers
         {
             if (!Services.CameraService.IsOverridden) return;
 
-            var posTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraPosition) as TimelineTrack<Vector3>;
-            var rotTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraRotation) as TimelineTrack<Quaternion>;
-            var fovTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraFOV) as TimelineTrack<float>;
+            foreach (var folderTrack in Sequence.Tracks.OfType<FolderTrack>())
+            {
+                string name = folderTrack.Name; 
+                if (!DefaultPose.TryGetValue(name, out var defaultState)) continue;
 
-            position = posTrack != null ? AnimationHelpers.GetInterpolatedVector3(posTrack, frame, position) ?? position : position;
-            rotation = rotTrack != null ? AnimationHelpers.GetInterpolatedQuaternion(rotTrack, frame, rotation) ?? rotation : rotation;
-            fov = fovTrack != null ? AnimationHelpers.GetInterpolatedFloat(fovTrack, frame, fov) : fov;
+                var posTrack = Sequence.GetTrackByName($"{name}_Position") as TimelineTrack<Vector3>;
+                var rotTrack = Sequence.GetTrackByName($"{name}_Rotation") as TimelineTrack<Quaternion>;
+                var fovTrack = Sequence.GetTrackByName($"{name}_FOV") as TimelineTrack<float>;
+
+                position = posTrack != null ? AnimationHelpers.GetInterpolatedVector3(posTrack, frame, defaultState.Position) ?? defaultState.Position : defaultState.Position;
+                rotation = rotTrack != null ? AnimationHelpers.GetInterpolatedQuaternion(rotTrack, frame, defaultState.Rotation) ?? defaultState.Rotation : defaultState.Rotation;
+                fov = fovTrack != null ? AnimationHelpers.GetInterpolatedFloat(fovTrack, frame, defaultState.FieldOfView) : defaultState.FieldOfView;
+            }
 
             eulerAngles = ToEulerAngles(rotation);
 
@@ -208,37 +230,6 @@ namespace TimelineAnimator.Sequencers
             float cosrCosp = 1 - 2 * (q.X * q.X + q.Z * q.Z);
             angles.Z = (float)Math.Atan2(sinrCosp, cosrCosp);
             return angles;
-        }
-
-        public override void RebuildHierarchy()
-        {
-            var sorted = new List<TimelineTrack>();
-            var camFolder = Sequence.GetTrackByName("Camera");
-            if (camFolder != null)
-            {
-                camFolder.Depth = 0;
-                camFolder.HasChildren = true;
-                sorted.Add(camFolder);
-            }
-            var posTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraPosition);
-            if (posTrack != null) 
-            { 
-                posTrack.Depth = 1; 
-                sorted.Add(posTrack); 
-            }
-            var rotTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraRotation);
-            if (rotTrack != null) 
-            { 
-                rotTrack.Depth = 1; 
-                sorted.Add(rotTrack); 
-            }
-            var fovTrack = Sequence.GetTrackByName(Constants.TrackNames.CameraFOV);
-            if (fovTrack != null) 
-            { 
-                fovTrack.Depth = 1; 
-                sorted.Add(fovTrack); 
-            }
-            Sequence.Tracks = sorted;
         }
     }
 }

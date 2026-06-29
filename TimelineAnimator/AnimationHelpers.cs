@@ -91,7 +91,7 @@ namespace TimelineAnimator
 
         public static float GetInterpolatedFloat(TimelineTrack<float> track, int frame, float defaultVal)
         {
-            if (AnimationHelpers.TryGetInterpolationState(track, frame, out var kfA, out var kfB, out var t))
+            if (TryGetInterpolationState(track, frame, out var kfA, out var kfB, out var t))
             {
                 if (kfA == kfB && frame < kfA.Frame) return defaultVal;
                 return kfA.Value + (kfB.Value - kfA.Value) * t;
