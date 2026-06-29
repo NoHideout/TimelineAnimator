@@ -15,40 +15,21 @@ namespace TimelineAnimator.Data
     public class AnimationTrack
     {
         public string TrackName { get; set; } = string.Empty;
-        public List<AnimationKeyframe> Keyframes { get; set; } = new();
+        public TrackType Type { get; set; }
+        public string ParentName { get; set; } = string.Empty;
+        public List<SerializedKeyframe> Keyframes { get; set; } = new();
     }
 
-    public class AnimationKeyframe
+    public class SerializedKeyframe
     {
         public int Frame { get; set; }
-        public TransformState Transform { get; set; }
         public KeyframeShape Shape { get; set; }
         public uint? CustomColor { get; set; }
-
         public Vector2 P1 { get; set; }
         public Vector2 P2 { get; set; }
-
-        public AnimationKeyframe() { }
-
-        public AnimationKeyframe(TrackKeyframe<TransformState> kf)
-        {
-            Frame = kf.Frame;
-            Transform = kf.Value;
-            Shape = kf.Shape;
-            CustomColor = kf.CustomColor;
-            P1 = kf.P1;
-            P2 = kf.P2;
-        }
-
-        public TrackKeyframe<TransformState> ToKeyframe()
-        {
-            return new TrackKeyframe<TransformState>(Frame, Transform)
-            {
-                Shape = Shape,
-                CustomColor = CustomColor,
-                P1 = P1,
-                P2 = P2
-            };
-        }
+        
+        public Vector3 VectorValue { get; set; }
+        public Quaternion QuatValue { get; set; }
+        public float FloatValue { get; set; }
     }
 }

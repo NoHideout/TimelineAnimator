@@ -19,10 +19,10 @@ namespace TimelineAnimator
         private bool isInitialized = false;
 
         private const string CommandName = "/animator";
-        private const string PosingPluginIPCName = "Ktisis"; // later need to handle properly for multiple
+        private const string PosingPluginIpcName = "Ktisis"; // later need to handle properly for multiple
 
         public string PluginConfigDirectory => pluginInterface.GetPluginConfigDirectory();
-        public readonly WindowSystem WindowSystem = new("TimelineAnimator");
+        private readonly WindowSystem windowSystem = new("TimelineAnimator");
 
         private ConfigWindow ConfigWindow { get; set; }
         private MainWindow MainWindow { get; set; }
@@ -34,7 +34,7 @@ namespace TimelineAnimator
             this.pluginInterface = pluginInterface;
             this.pluginInterface.Create<Services>();
 
-            if (this.pluginInterface.InstalledPlugins.Any(p => p is { InternalName: PosingPluginIPCName, IsLoaded: true }))
+            if (this.pluginInterface.InstalledPlugins.Any(p => p is { InternalName: PosingPluginIpcName, IsLoaded: true }))
             {
                 InitializePlugin();
             }
@@ -46,7 +46,7 @@ namespace TimelineAnimator
 
         private void OnActivePluginsChanged(IActivePluginsChangedEventArgs args)
         {
-            if (args.Kind == PluginListInvalidationKind.Loaded && args.AffectedInternalNames.Contains(PosingPluginIPCName))
+            if (args.Kind == PluginListInvalidationKind.Loaded && args.AffectedInternalNames.Contains(PosingPluginIpcName))
             {
                 InitializePlugin();
                 pluginInterface.ActivePluginsChanged -= OnActivePluginsChanged;
@@ -62,7 +62,7 @@ namespace TimelineAnimator
                 Services.Initialize(this);
 
                 ConfigWindow = new ConfigWindow(this);
-                MainWindow = new MainWindow(this)
+                MainWindow = new MainWindow()
                 {
                     TitleBarButtons =
                     [
@@ -83,10 +83,10 @@ namespace TimelineAnimator
                 TutorialWindow = new TutorialWindow();
                 EasingWindow = new EasingWindow();
 
-                WindowSystem.AddWindow(ConfigWindow);
-                WindowSystem.AddWindow(MainWindow);
-                WindowSystem.AddWindow(TutorialWindow);
-                WindowSystem.AddWindow(EasingWindow);
+                windowSystem.AddWindow(ConfigWindow);
+                windowSystem.AddWindow(MainWindow);
+                windowSystem.AddWindow(TutorialWindow);
+                windowSystem.AddWindow(EasingWindow);
                 pluginInterface.UiBuilder.DisableGposeUiHide = true;
 
                 Services.CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
@@ -94,14 +94,14 @@ namespace TimelineAnimator
                     HelpMessage = "Toggles the Main Window."
                 });
 
-                pluginInterface.UiBuilder.Draw += DrawUI;
+                pluginInterface.UiBuilder.Draw += DrawUi;
                 pluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
                 pluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
 
                 Services.Framework.Update += OnFrameworkUpdate;
                 Services.WorkspaceService.EditEasingRequested += OpenEasingUiForKeyframes;
 
-                Services.Log.Information($"Found {PosingPluginIPCName}");
+                Services.Log.Information($"Found {PosingPluginIpcName}");
                 isInitialized = true;
             }
             catch (Exception ex)
@@ -110,9 +110,9 @@ namespace TimelineAnimator
             }
         }
 
-        private void DrawUI()
+        private void DrawUi()
         {
-            WindowSystem.Draw();
+            windowSystem.Draw();
             Services.FileDialogManager.Draw();
         }
 
@@ -123,11 +123,11 @@ namespace TimelineAnimator
             if (!isInitialized) return;
 
             Services.Framework.Update -= OnFrameworkUpdate;
-            pluginInterface.UiBuilder.Draw -= DrawUI;
+            pluginInterface.UiBuilder.Draw -= DrawUi;
             pluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
             pluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
 
-            WindowSystem.RemoveAllWindows();
+            windowSystem.RemoveAllWindows();
 
             Services.WorkspaceService.EditEasingRequested -= OpenEasingUiForKeyframes;
 
@@ -143,8 +143,6 @@ namespace TimelineAnimator
 
         private void OnFrameworkUpdate(IFramework framework)
         {
-            if (Services.PlaybackService == null || Services.ProjectService == null) return;
-
             bool currentlyInGpose = Services.ClientState.IsGPosing;
             if (currentlyInGpose != wasInGpose)
             {
@@ -194,14 +192,14 @@ namespace TimelineAnimator
             MainWindow.Toggle();
         }
 
-        public void ToggleConfigUi() => ConfigWindow?.Toggle();
-        public void ToggleMainUi() => MainWindow?.Toggle();
+        private void ToggleConfigUi() => ConfigWindow?.Toggle();
+        private void ToggleMainUi() => MainWindow?.Toggle();
         public void ToggleTutorialWindow() => TutorialWindow?.Toggle();
 
-        public void OpenEasingUiForKeyframes(List<ITrackKeyframe>? keyframes)
+        private void OpenEasingUiForKeyframes(List<ITrackKeyframe>? keyframes)
         {
             EasingWindow?.SetKeyframes(keyframes);
-            if (EasingWindow != null) EasingWindow.IsOpen = true;
+            EasingWindow?.IsOpen = true;
         }
 
         public void UpdateEasingUiKeyframes(List<ITrackKeyframe>? keyframes)

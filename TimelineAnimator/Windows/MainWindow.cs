@@ -11,19 +11,17 @@ namespace TimelineAnimator.Windows
 {
     public class MainWindow : Window, IDisposable
     {
-        private readonly Plugin plugin;
         private bool inspectorVisible = true;
-        private float inspectorWidth = 200f;
+        private const float InspectorWidth = 250f;
         private readonly ImSequencer.ImSequencerCore timelineRenderer = new();
 
-        public MainWindow(Plugin plugin) : base("Timeline Animator##SequencerMain")
+        public MainWindow() : base("Timeline Animator##SequencerMain")
         {
             SizeConstraints = new WindowSizeConstraints
             {
                 MinimumSize = new Vector2(600, 200),
                 MaximumSize = new Vector2(float.MaxValue, float.MaxValue)
             };
-            this.plugin = plugin;
         }
 
         public void Dispose()
@@ -41,7 +39,7 @@ namespace TimelineAnimator.Windows
             float remainingHeight = ImGui.GetContentRegionAvail().Y;
             const float toggleButtonWidth = 15f;
             float sequencerWidth = totalWidth - toggleButtonWidth - style.ItemSpacing.X;
-            if (inspectorVisible) sequencerWidth -= inspectorWidth + style.ItemSpacing.X;
+            if (inspectorVisible) sequencerWidth -= InspectorWidth + style.ItemSpacing.X;
 
             ImGui.BeginChild("SequencerArea", new Vector2(sequencerWidth, remainingHeight), false);
             DrawSequencerTabs(sequencerWidth, remainingHeight);
@@ -52,12 +50,10 @@ namespace TimelineAnimator.Windows
             if (inspectorVisible)
             {
                 ImGui.SameLine();
-                ImGui.BeginChild("InspectorPanel", new Vector2(inspectorWidth, remainingHeight), true);
-                ImGui.PushItemWidth(ImGui.GetContentRegionAvail().X);
+                ImGui.BeginChild("InspectorPanel", new Vector2(InspectorWidth, remainingHeight), true);
 
                 InspectorPanel.Draw();
-
-                ImGui.PopItemWidth();
+                
                 ImGui.EndChild();
             }
         }
