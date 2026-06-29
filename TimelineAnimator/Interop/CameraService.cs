@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Dalamud.Hooking;
 using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
@@ -199,7 +200,7 @@ namespace TimelineAnimator.Interop
 
             return cameraCollideHook!.Original(camera, a2, a3, a4, a5, a6);
         }
-
+        public bool CanEnableCamera => Services.ClientState.IsGPosing && Services.ProjectService.Sequencers.OfType<Sequencers.CameraSequencer>().Any();
         public void Dispose()
         {
             IsOverridden = false;

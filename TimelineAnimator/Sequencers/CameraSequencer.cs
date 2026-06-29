@@ -10,7 +10,7 @@ namespace TimelineAnimator.Sequencers
 {
     public class CameraSequencer : SequencerBase
     {
-        public override string Name => "Cinematic Camera";
+        public override string Name => "Camera";
 
         private float flySpeed = 10.0f;
         private float lookSensitivity = 0.003f;
@@ -98,42 +98,16 @@ namespace TimelineAnimator.Sequencers
             ImGui.Separator();
             ImGui.Spacing();
 
-            bool isFreeCam = Services.CameraService.IsOverridden;
-
-            if (ImGui.Checkbox("Enable Camera", ref isFreeCam))
+            if (Services.CameraService.IsOverridden)
             {
-                Services.CameraService.IsOverridden = isFreeCam;
-                if (isFreeCam)
-                {
-                    var state = Services.CameraService.GetCurrentCameraState();
-                    position = state.Position;
-                    rotation = state.Rotation;
-                    fov = state.FoV;
-                    eulerAngles = ToEulerAngles(rotation);
-                }
-            }
-
-            if (isFreeCam)
-            {
-                ImGui.Spacing();
                 ImGui.Text("Movement Settings");
                 ImGui.DragFloat("Fly Speed", ref flySpeed, 0.1f, 1.0f, 100.0f);
                 ImGui.DragFloat("Mouse Sensitivity", ref lookSensitivity, 0.001f, 0.001f, 0.02f);
-
-                ImGui.Spacing();
-                ImGui.Separator();
-                ImGui.Spacing();
-
-                ImGui.Text("Camera Parameters");
-
-                ImGui.DragFloat3("Position", ref position, 0.05f);
-
-                if (ImGui.DragFloat3("Rotation", ref eulerAngles, 0.05f))
-                {
-                    rotation = Quaternion.CreateFromYawPitchRoll(eulerAngles.Y, eulerAngles.X, eulerAngles.Z);
-                }
-
-                ImGui.DragFloat("FOV", ref fov, 0.01f, 0.1f, 3.0f);
+            }
+            else
+            {
+                ImGui.TextDisabled("Enable Free Camera in the toolbar");
+                ImGui.TextDisabled("to use movement controls.");
             }
 
             ImGui.Spacing();
