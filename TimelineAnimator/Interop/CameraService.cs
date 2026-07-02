@@ -36,7 +36,7 @@ namespace TimelineAnimator.Interop
         public uint Unk2;
         public bool IsFocused;
 
-        public bool IsButtonHeld(MouseButton button) => (this.Pressed & button) != 0;
+        public bool IsButtonHeld(MouseButton button) => (Pressed & button) != 0;
     }
 
     //Todo decide if this shouldnt be cam interop and seperate service

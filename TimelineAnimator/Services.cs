@@ -26,6 +26,7 @@ namespace TimelineAnimator
         internal static KtisisIpc KtisisIpc { get; private set; } = null!;
         internal static InputManager InputManager { get; private set; } = null!;
         public static WorkspaceService WorkspaceService { get; private set; } = null!;
+        public static AutosaveService AutosaveService { get; private set; } = null!;
 
         internal static void Initialize(Plugin plugin)
         {
@@ -37,6 +38,7 @@ namespace TimelineAnimator
             PlaybackService = new PlaybackService();
             IntegrationService = new IntegrationService();
             WorkspaceService = new WorkspaceService();
+            AutosaveService = new AutosaveService();
         }
 
         internal static void Dispose()

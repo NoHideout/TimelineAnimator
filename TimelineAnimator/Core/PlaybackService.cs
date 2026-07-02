@@ -42,7 +42,7 @@ namespace TimelineAnimator.Core
 
         public void Update(float deltaSeconds)
         {
-            bool inGPose = Services.ClientState != null && Services.ClientState.IsGPosing;
+            bool inGPose = Services.ClientState.IsGPosing;
 
             if (wasInGPose && !inGPose)
             {

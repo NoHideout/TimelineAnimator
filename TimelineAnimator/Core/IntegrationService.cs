@@ -31,22 +31,44 @@ namespace TimelineAnimator.Core
                     if (TrackNames == null || TrackNames.Count == 0) continue;
 
                     var existingSequencer = project.Sequencers.OfType<ActorSequencer>().FirstOrDefault(s => s.ActorIndex == actorIndex);
-                    var gameObject = Services.ObjectTable[(int)actorIndex];
+                    var gameObject = Services.ObjectTable[actorIndex];
                     if (gameObject == null) continue;
 
                     var nativeBones = HavokInterop.GetNativeBones(gameObject.Address);
-                    var defaultPose = nativeBones.ToDictionary(k => k.Key, v => v.Value.Transform);
+
+                    var basePose = new AnimationPose();
+                    foreach (var kvp in nativeBones)
+                    {
+                        basePose.BonePoses[kvp.Key] = new TransformPose 
+                        {
+                            Position = kvp.Value.Transform.Position,
+                            Rotation = kvp.Value.Transform.Rotation,
+                            Scale = kvp.Value.Transform.Scale
+                        };
+                    }
+                    
+                    // store scene orig in case of migration
+                    var player = Services.ObjectTable[0];
+                    if (player != null)
+                    {
+                        basePose.SceneOrigin = new TransformPose
+                        {
+                            Position = player.Position,
+                            Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, player.Rotation),
+                            Scale = Vector3.One
+                        };
+                    }
+                    
                     var fullHierarchy = nativeBones.ToDictionary(k => k.Key, v => v.Value.ParentName);
 
                     ActorSequencer targetSequencer;
-                    
                     if (existingSequencer == null)
                     {
                         int currentGlobalMax = project.GetGlobalMaxFrame();
                         string actorName = $"Actor {actorIndex}";
 
-                        targetSequencer = new ActorSequencer(actorName, (uint)actorIndex, defaultPose);
-                        targetSequencer.Sequence.FrameMax = currentGlobalMax;
+                        targetSequencer = new ActorSequencer(actorName, (uint)actorIndex, basePose);
+                        targetSequencer.Clip.EndFrame = currentGlobalMax;
                         targetSequencer.FullSkeletonHierarchy = fullHierarchy;
                         project.Sequencers.Add(targetSequencer);
                     }
@@ -59,49 +81,55 @@ namespace TimelineAnimator.Core
                     foreach (var TrackName in TrackNames)
                     {
                         string parentName = nativeBones.TryGetValue(TrackName, out var info) ? info.ParentName : "";
-                        TransformState boneTransform = defaultPose.TryGetValue(TrackName, out var bone) ? bone : TransformState.Identity;
+                        var boneData = basePose.BonePoses.TryGetValue(TrackName, out var bone) 
+                            ? bone 
+                            : TransformPose.Identity;
+
+                        var obj = targetSequencer.Clip.Objects.FirstOrDefault(o => o.Name == TrackName);
+    
+                        if (obj == null)
+                        {
+                            obj = new AnimationObject 
+                            { 
+                                Name = TrackName, 
+                                Type = ObjectType.Bone 
+                            };
+
+                            if (!string.IsNullOrEmpty(parentName))
+                            {
+                                var parentObj = targetSequencer.Clip.Objects.FirstOrDefault(o => o.Name == parentName);
+                                if (parentObj != null) obj.ParentId = parentObj.Id;
+                            }
+
+                            targetSequencer.Clip.Objects.Add(obj);
+                        }
+
+                        void SetKey(PropertyType prop, float value)
+                        {
+                            var track = obj.GetOrAddTrack(prop);
+                            track.Curve.AddKey(playback.CurrentFrame, value);
+                        }
+
+                        SetKey(PropertyType.PositionX, boneData.Position.X);
+                        SetKey(PropertyType.PositionY, boneData.Position.Y);
+                        SetKey(PropertyType.PositionZ, boneData.Position.Z);
                         
-                        var folder = targetSequencer.Sequence.GetTrackByName(TrackName);
-                        if (folder == null)
+                        var eulerRotation = AnimationHelpers.ToEulerAngles(boneData.Rotation);
+                        float GetUnwrappedAngle(PropertyType prop, float rawAngle)
                         {
-                            folder = new FolderTrack(TrackName) { ParentName = parentName };
-                            targetSequencer.Sequence.Tracks.Add(folder);
-
-                            var posTrack = targetSequencer.Sequence.AddTrack<Vector3>($"{TrackName}_Position", TrackType.Vector3);
-                            posTrack.ParentName = TrackName; posTrack.DisplayName = "Position";
-                            
-                            var rotTrack = targetSequencer.Sequence.AddTrack<Quaternion>($"{TrackName}_Rotation", TrackType.Quaternion);
-                            rotTrack.ParentName = TrackName; rotTrack.DisplayName = "Rotation";
-                            
-                            var scaleTrack = targetSequencer.Sequence.AddTrack<Vector3>($"{TrackName}_Scale", TrackType.Vector3);
-                            scaleTrack.ParentName = TrackName; scaleTrack.DisplayName = "Scale";
-                            
-                            posTrack.AddKeyframe(playback.CurrentFrame, boneTransform.Position);
-                            rotTrack.AddKeyframe(playback.CurrentFrame, boneTransform.Rotation);
-                            scaleTrack.AddKeyframe(playback.CurrentFrame, boneTransform.Scale);
+                            var track = obj.GetTrack(prop);
+                            if (track == null || track.Curve.Keys.Count == 0) return rawAngle;
+                            var previousKey = track.Curve.Keys.LastOrDefault(k => k.Frame <= playback.CurrentFrame) ?? track.Curve.Keys.Last();
+                            return AnimationHelpers.UnwrapAngle(rawAngle, previousKey.Value);
                         }
-                        else
-                        {
-                            folder.ParentName = parentName;
-                            
-                            var pT = targetSequencer.Sequence.GetTrackByName($"{TrackName}_Position") as TimelineTrack<Vector3>;
-                            if (pT == null) { pT = targetSequencer.Sequence.AddTrack<Vector3>($"{TrackName}_Position", TrackType.Vector3); pT.ParentName = TrackName; pT.DisplayName = "Position"; }
 
-                            var rT = targetSequencer.Sequence.GetTrackByName($"{TrackName}_Rotation") as TimelineTrack<Quaternion>;
-                            if (rT == null) { rT = targetSequencer.Sequence.AddTrack<Quaternion>($"{TrackName}_Rotation", TrackType.Quaternion); rT.ParentName = TrackName; rT.DisplayName = "Rotation"; }
+                        SetKey(PropertyType.RotationX, GetUnwrappedAngle(PropertyType.RotationX, eulerRotation.X));
+                        SetKey(PropertyType.RotationY, GetUnwrappedAngle(PropertyType.RotationY, eulerRotation.Y));
+                        SetKey(PropertyType.RotationZ, GetUnwrappedAngle(PropertyType.RotationZ, eulerRotation.Z));
 
-                            var sT = targetSequencer.Sequence.GetTrackByName($"{TrackName}_Scale") as TimelineTrack<Vector3>;
-                            if (sT == null) { sT = targetSequencer.Sequence.AddTrack<Vector3>($"{TrackName}_Scale", TrackType.Vector3); sT.ParentName = TrackName; sT.DisplayName = "Scale"; }
-
-                            var kfPos = pT.Keyframes.FirstOrDefault(k => k.Frame == playback.CurrentFrame);
-                            if (kfPos == null) pT.AddKeyframe(playback.CurrentFrame, boneTransform.Position); else kfPos.Value = boneTransform.Position;
-
-                            var kfRot = rT.Keyframes.FirstOrDefault(k => k.Frame == playback.CurrentFrame);
-                            if (kfRot == null) rT.AddKeyframe(playback.CurrentFrame, boneTransform.Rotation); else kfRot.Value = boneTransform.Rotation;
-
-                            var kfScale = sT.Keyframes.FirstOrDefault(k => k.Frame == playback.CurrentFrame);
-                            if (kfScale == null) sT.AddKeyframe(playback.CurrentFrame, boneTransform.Scale); else kfScale.Value = boneTransform.Scale;
-                        }
+                        SetKey(PropertyType.ScaleX, boneData.Scale.X);
+                        SetKey(PropertyType.ScaleY, boneData.Scale.Y);
+                        SetKey(PropertyType.ScaleZ, boneData.Scale.Z);
                     }
                     
                     targetSequencer.RebuildHierarchy();

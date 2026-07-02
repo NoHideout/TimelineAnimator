@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using TimelineAnimator.Data;
 using TimelineAnimator.ImSequencer;
@@ -10,231 +11,218 @@ namespace TimelineAnimator.Sequencers
     public abstract class SequencerBase : ISequencer
     {
         public abstract string Name { get; }
-        public TimelineSequence Sequence { get; } = new();
+        public AnimationClip Clip { get; } = new();
         public ImSequencerState State { get; } = new();
-        public Dictionary<string, TransformState> DefaultPose { get; set; } = new();
         public bool IsVisible { get; set; } = true;
+
         public abstract void ApplyPose(int frame);
         public abstract void DrawInspector(int currentFrame);
 
+        public List<SequencerRow> GetFlattenedRows()
+        {
+            var rows = new List<SequencerRow>();
+            void AddObj(AnimationObject obj, int depth)
+            {
+                rows.Add(new SequencerRow { Id = obj.Id, AnimObject = obj, Name = obj.Name, Depth = depth });
+                foreach (var t in obj.Tracks) 
+                    rows.Add(new SequencerRow { Id = t.Id, PropTrack = t, Name = t.Property.ToString(), Depth = depth + 1 });
+                foreach (var child in Clip.Objects.Where(o => o.ParentId == obj.Id)) 
+                    AddObj(child, depth + 1);
+            }
+            foreach (var root in Clip.Objects.Where(o => !o.ParentId.HasValue)) AddObj(root, 0);
+            return rows;
+        }
+
         public virtual void Draw(ImSequencerCore uiCore, ref int currentFrame, ref int selectedEntry, bool modifierHeld)
         {
-            uiCore.Draw(Name, State, Sequence, ref currentFrame, ref selectedEntry, modifierHeld);
-            this.HandleContextMenu(modifierHeld, ref selectedEntry);
+            uiCore.Draw(Name, State, Clip, ref currentFrame, ref selectedEntry, modifierHeld);
+            HandleContextMenu(modifierHeld, ref selectedEntry);
         }
 
-        public List<ITrackKeyframe> GetSelectedKeyframes()
+        public List<CurveKeyframe> GetSelectedKeyframes()
         {
-            return State.SelectedKeyframes
-                .Select(sk => Sequence.GetTrack(sk.trackIndex)?.GetUntypedKeyframes().FirstOrDefault(k => k.Id == sk.keyframeId))
-                .Where(kf => kf != null)
-                .ToList()!;
+            var selectedIds = State.SelectedKeyframes.Select(sk => sk.keyframeId).ToHashSet();
+            return Clip.Objects.SelectMany(o => o.Tracks).SelectMany(t => t.Curve.Keys)
+                .Where(k => selectedIds.Contains(k.Id)).ToList();
         }
 
-        public int GetSelectedKeyframeCount() => State.SelectedKeyframes.Count;
-
-        public ITrackKeyframe? GetFirstSelectedKeyframe() => GetSelectedKeyframes().FirstOrDefault();
-        
         public void DeleteSelectedKeyframes()
         {
             var selectedIds = State.SelectedKeyframes.Select(sk => sk.keyframeId).ToHashSet();
-            foreach (var trackIndex in State.SelectedKeyframes.Select(x => x.trackIndex).Distinct())
+            foreach (var track in Clip.Objects.SelectMany(o => o.Tracks))
             {
-                var track = Sequence.GetTrack(trackIndex);
-                if (track != null)
-                {
-                    foreach (var id in selectedIds) track.DeleteKeyframe(id);
-                }
+                track.Curve.Keys.RemoveAll(k => selectedIds.Contains(k.Id));
             }
-
             State.SelectedKeyframes.Clear();
         }
 
-        public virtual void RemoveTrackSafely(int index)
+        public void RemoveTrackSafely(int index)
         {
-            if (index < 0 || index >= Sequence.Tracks.Count) return;
+            var rows = GetFlattenedRows();
+            if (index < 0 || index >= rows.Count) return;
+            var targetRow = rows[index];
 
-            var trackToDelete = Sequence.Tracks[index];
-            var parentOfDeleted = trackToDelete.ParentName;
-
-            var tracksToRemove = new HashSet<TimelineTrack> { trackToDelete };
-
-            foreach (var t in Sequence.Tracks)
+            if (targetRow.AnimObject != null)
             {
-                if (t.ParentName == trackToDelete.Name)
+                var toDelete = new HashSet<Guid> { targetRow.Id };
+                bool added;
+                do
                 {
-                    if (t is not FolderTrack)
+                    added = false;
+                    foreach (var obj in Clip.Objects)
                     {
-                        tracksToRemove.Add(t);
+                        if (obj.ParentId.HasValue && toDelete.Contains(obj.ParentId.Value) && !toDelete.Contains(obj.Id))
+                        {
+                            toDelete.Add(obj.Id);
+                            added = true;
+                        }
                     }
-                    else
-                    {
-                        t.ParentName = parentOfDeleted;
-                    }
-                }
+                } while (added);
+                Clip.Objects.RemoveAll(o => toDelete.Contains(o.Id));
             }
-            
-            Sequence.Tracks.RemoveAll(t => tracksToRemove.Contains(t));
+            else if (targetRow.PropTrack != null)
+            {
+                foreach (var obj in Clip.Objects)
+                    obj.Tracks.RemoveAll(t => t.Id == targetRow.Id);
+            }
             State.SelectedKeyframes.Clear();
             State.contextKeyframe = null;
-
             RebuildHierarchy();
         }
 
-        public virtual void HandleContextMenu(bool modifierHeld, ref int sharedSelectedEntry)
+        public void HandleContextMenu(bool modifierHeld, ref int sharedSelectedEntry)
         {
             using var popup = Dalamud.Interface.Utility.Raii.ImRaii.Popup("SequencerContextMenu");
             if (!popup) return;
-
+            
             var hasSelection = State.SelectedKeyframes.Any();
             var contextKf = State.contextKeyframe;
             var canUseKeyframe = contextKf != null || hasSelection;
+            
+            var rows = GetFlattenedRows();
+            bool validRow = State.contextTrackIndex >= 0 && State.contextTrackIndex < rows.Count;
+            bool isPropTrack = validRow && rows[State.contextTrackIndex].PropTrack != null;
 
-            if (ImGui.MenuItem("Edit Easing", string.Empty, false, canUseKeyframe))
+            if (ImGui.MenuItem("Edit Easing / Graph", string.Empty, false, isPropTrack))
             {
-                var keyframesToEdit = new List<ITrackKeyframe>();
-                if (hasSelection)
-                {
-                    foreach (var sk in State.SelectedKeyframes)
-                    {
-                        var track = Sequence.GetTrack(sk.trackIndex);
-                        var kf = track?.GetUntypedKeyframes().FirstOrDefault(k => k.Id == sk.keyframeId);
-                        if (kf != null) keyframesToEdit.Add(kf);
-                    }
-                }
-                else if (contextKf != null)
-                {
-                    keyframesToEdit.Add(contextKf);
-                }
-
-                if (keyframesToEdit.Any())
-                {
-                    Services.WorkspaceService.RequestEditEasing(keyframesToEdit);
-                }
-
+                sharedSelectedEntry = State.contextTrackIndex;
+                Services.WorkspaceService.SharedSelectedEntry = sharedSelectedEntry;
+                
+                Services.WorkspaceService.RequestEditGraph(null);
+                
                 ImGui.CloseCurrentPopup();
             }
 
+            ImGui.Separator();
+
             if (ImGui.MenuItem("Copy", string.Empty, false, canUseKeyframe))
             {
-                var keyframesToCopy = new List<ITrackKeyframe>();
-                var keyframeToTrackMap = new Dictionary<Guid, int>();
+                var keyframesToCopy = new List<CurveKeyframe>();
+                var trackMap = new Dictionary<Guid, Guid>();
+                
+                var sourceKeyframes = hasSelection ? GetSelectedKeyframes() : new List<CurveKeyframe>();
+                if (!hasSelection && contextKf != null) sourceKeyframes.Add(contextKf);
 
-                if (hasSelection)
+                foreach (var kf in sourceKeyframes)
                 {
-                    foreach (var sk in State.SelectedKeyframes)
+                    var track = Clip.Objects.SelectMany(o => o.Tracks).FirstOrDefault(t => t.Curve.Keys.Any(k => k.Id == kf.Id));
+                    if (track != null)
                     {
-                        var track = Sequence.GetTrack(sk.trackIndex);
-                        var kf = track?.UntypedKeyframes.FirstOrDefault(k => k.Id == sk.keyframeId);
-                        if (kf != null)
+                        var clone = new CurveKeyframe
                         {
-                            keyframesToCopy.Add(kf);
-                            keyframeToTrackMap[kf.Id] = sk.trackIndex;
-                        }
+                            Frame = kf.Frame,
+                            Value = kf.Value,
+                            Tangents = kf.Tangents,
+                            Interpolation = kf.Interpolation,
+                            Shape = kf.Shape,
+                            CustomColor = kf.CustomColor
+                        };
+                        trackMap[clone.Id] = track.Id;
+                        keyframesToCopy.Add(clone);
                     }
                 }
-                else if (contextKf != null)
-                {
-                    keyframesToCopy.Add(contextKf);
-                    keyframeToTrackMap[contextKf.Id] = State.contextTrackIndex;
-                }
-
-                Clipboard.Copy(keyframesToCopy, keyframeToTrackMap);
+                
+                Clipboard.Copy(keyframesToCopy, trackMap);
                 ImGui.CloseCurrentPopup();
             }
 
             if (ImGui.MenuItem("Paste", string.Empty, false, Clipboard.HasData))
             {
-                var pasteFrame = State.contextMouseFrame;
-                var clipboardData = Clipboard.GetKeyframesForPasting();
-
-                if (clipboardData.Any())
+                var copiedData = Clipboard.GetKeyframesForPasting();
+                if (copiedData.Count > 0)
                 {
-                    var blockCenterFrame = (clipboardData.Min(c => c.Keyframe.Frame) + clipboardData.Max(c => c.Keyframe.Frame)) / 2;
+                    int minFrame = copiedData.Min(c => c.Keyframe.Frame);
+                    int frameOffset = State.contextMouseFrame - minFrame;
 
-                    foreach (var group in clipboardData.GroupBy(ckf => ckf.TrackIndex))
+                    State.SelectedKeyframes.Clear();
+
+                    foreach (var copied in copiedData)
                     {
-                        var targetTrack = Sequence.GetTrack(group.Key);
-                        if (targetTrack != null)
+                        var track = Clip.Objects.SelectMany(o => o.Tracks).FirstOrDefault(t => t.Id == copied.TrackId);
+                        if (track != null)
                         {
-                            foreach (var copiedKeyframe in group)
+                            int targetFrame = copied.Keyframe.Frame + frameOffset;
+                            
+                            var newKf = track.Curve.AddKey(targetFrame, copied.Keyframe.Value);
+                            newKf.Tangents = copied.Keyframe.Tangents;
+                            newKf.Interpolation = copied.Keyframe.Interpolation;
+                            newKf.Shape = copied.Keyframe.Shape;
+                            newKf.CustomColor = copied.Keyframe.CustomColor;
+
+                            int trackIndex = rows.FindIndex(r => r.Id == track.Id);
+                            if (trackIndex >= 0)
                             {
-                                int newFrame = pasteFrame + (copiedKeyframe.Keyframe.Frame - blockCenterFrame);
-                                targetTrack.PasteKeyframe(newFrame, copiedKeyframe.Keyframe);
+                                State.SelectedKeyframes.Add(new SelectedKeyframe(trackIndex, newKf.Id));
                             }
                         }
                     }
                 }
-
                 ImGui.CloseCurrentPopup();
             }
 
             ImGui.Separator();
 
             if (!modifierHeld) ImGui.BeginDisabled();
+            
             if (ImGui.MenuItem("Delete Keyframe", string.Empty, false, canUseKeyframe))
             {
                 if (hasSelection)
                 {
-                    foreach (var sk in State.SelectedKeyframes.ToList())
-                    {
-                        Sequence.GetTrack(sk.trackIndex)?.DeleteKeyframe(sk.keyframeId);
-                    }
-
-                    State.SelectedKeyframes.Clear();
+                    DeleteSelectedKeyframes();
                 }
                 else if (contextKf != null)
                 {
-                    Sequence.GetTrack(State.contextTrackIndex)?.DeleteKeyframe(contextKf.Id);
+                    foreach (var track in Clip.Objects.SelectMany(o => o.Tracks))
+                        track.Curve.Keys.RemoveAll(k => k.Id == contextKf.Id);
                 }
-
+                
                 ImGui.CloseCurrentPopup();
             }
-
+            
             if (!modifierHeld) ImGui.EndDisabled();
 
             DrawAdditionalContextMenus(modifierHeld, ref sharedSelectedEntry);
         }
 
         protected virtual void DrawAdditionalContextMenus(bool modifierHeld, ref int sharedSelectedEntry) { }
-        
+
         public virtual void RebuildHierarchy()
         {
-            var sorted = new List<TimelineTrack>();
-            var childrenMap = new Dictionary<string, List<TimelineTrack>>();
-            
-            foreach (var t in Sequence.Tracks)
+            int GetDepth(AnimationObject obj, int currentDepth = 0)
             {
-                var p = t.ParentName ?? string.Empty;
-                if (!childrenMap.ContainsKey(p)) childrenMap[p] = new();
-                childrenMap[p].Add(t);
+                if (!obj.ParentId.HasValue || currentDepth > 50) return currentDepth;
+                var parent = Clip.Objects.FirstOrDefault(o => o.Id == obj.ParentId.Value);
+                return parent != null ? GetDepth(parent, currentDepth + 1) : currentDepth;
             }
 
-            void AddNode(TimelineTrack node, int depth)
-            {
-                node.Depth = depth;
-                node.HasChildren = childrenMap.ContainsKey(node.Name) && childrenMap[node.Name].Any();
-                sorted.Add(node);
-                if (childrenMap.TryGetValue(node.Name, out var children))
-                {
-                    var sortedChildren = children
-                        .OrderBy(c => c is FolderTrack ? 1 : 0)
-                        .ThenBy(c => c.Name);
-
-                    foreach (var child in sortedChildren) AddNode(child, depth + 1);
-                }
-            }
-
-            if (childrenMap.TryGetValue(string.Empty, out var roots))
-            {
-                var sortedRoots = roots
-                    .OrderBy(t => t is FolderTrack ? 1 : 0)
-                    .ThenBy(t => t.Name);
-                    
-                foreach (var root in sortedRoots) AddNode(root, 0);
-            }
-
-            Sequence.Tracks = sorted;
+            foreach (var obj in Clip.Objects) obj.Depth = GetDepth(obj);
         }
+
+        protected float EvaluateProperty(AnimationObject obj, PropertyType type, int frame, float defaultVal)
+        {
+            var track = obj.GetTrack(type);
+            return track == null ? defaultVal : AnimationHelpers.EvaluateCurve(track.Curve, frame, defaultVal);
+        }
+
     }
 }

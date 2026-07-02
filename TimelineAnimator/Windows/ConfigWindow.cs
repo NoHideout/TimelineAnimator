@@ -73,6 +73,55 @@ namespace TimelineAnimator.Windows
                 ImGui.EndTabItem();
             }
 
+            if (ImGui.BeginTabItem("Autosave"))
+            {
+                var enableAutosave = Services.Configuration.EnableAutosave;
+                if (ImGui.Checkbox("Enable Autosave", ref enableAutosave))
+                {
+                    Services.Configuration.EnableAutosave = enableAutosave;
+                    Services.Configuration.Save();
+                }
+
+                if (enableAutosave)
+                {
+                    ImGui.Indent();
+                    ImGui.Spacing();
+
+                    var interval = Services.Configuration.AutosaveIntervalMinutes;
+                    if (ImGui.SliderInt("Autosave interval", ref interval, 1, 60))
+                    {
+                        Services.Configuration.AutosaveIntervalMinutes = interval;
+                        Services.Configuration.Save();
+                    }
+                    
+                    var maxBackups = Services.Configuration.MaxAutosaveBackups;
+                    if (ImGui.SliderInt("Max Backups", ref maxBackups, 1, 20))
+                    {
+                        Services.Configuration.MaxAutosaveBackups = maxBackups;
+                        Services.Configuration.Save();
+                    }
+                    
+                    ImGui.Spacing();
+                    ImGui.Text("Custom Autosave Directory:");
+                    
+                    var dir = Services.Configuration.AutosaveDirectory;
+                    string displayDir = string.IsNullOrWhiteSpace(dir) ? Services.PluginInterface.GetPluginConfigDirectory() : dir;
+
+                    if (ImGui.InputText("##AutosaveDir", ref displayDir, 512))
+                    {
+                        Services.Configuration.AutosaveDirectory = displayDir == Services.PluginInterface.GetPluginConfigDirectory() ? string.Empty : displayDir;
+                        Services.Configuration.Save();
+                    }
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip("Leave blank or set to the default plugin config directory.");
+                    }
+
+                    ImGui.Unindent();
+                }
+                ImGui.EndTabItem();
+            }
+
             if (ImGui.BeginTabItem("Keybindings"))
             {
                 ImGui.TextDisabled("Click a button to rebind. Press ESC to clear");

@@ -12,33 +12,38 @@ namespace TimelineAnimator.Sequencers
         public uint ActorIndex { get; }
         public Dictionary<string, string> FullSkeletonHierarchy { get; set; } = new();
 
-        public ActorSequencer(string name, uint actorIndex, Dictionary<string, TransformState>? defaultPose)
+        public ActorSequencer(string name, uint actorIndex, AnimationPose basePose)
         {
             Name = name;
             ActorIndex = actorIndex;
-            DefaultPose = defaultPose;
+            Clip.BasePose = basePose;
         }
 
         public override void ApplyPose(int frame)
         {
             var matrices = new Dictionary<string, Matrix4x4>();
-
-            foreach (var folderTrack in Sequence.Tracks.OfType<FolderTrack>())
+            
+            foreach (var obj in Clip.Objects)
             {
-                string boneName = folderTrack.Name;
-                if (!DefaultPose.TryGetValue(boneName, out var defaultState)) continue;
+                if (obj.Type != ObjectType.Bone) continue;
+                if (!Clip.BasePose.BonePoses.TryGetValue(obj.Name, out var defaultState)) continue;
 
-                var posTrack = Sequence.GetTrackByName($"{boneName}_Position") as TimelineTrack<Vector3>;
-                var rotTrack = Sequence.GetTrackByName($"{boneName}_Rotation") as TimelineTrack<Quaternion>;
-                var scaleTrack = Sequence.GetTrackByName($"{boneName}_Scale") as TimelineTrack<Vector3>;
+                float posX = EvaluateProperty(obj, PropertyType.PositionX, frame, defaultState.Position.X);
+                float posY = EvaluateProperty(obj, PropertyType.PositionY, frame, defaultState.Position.Y);
+                float posZ = EvaluateProperty(obj, PropertyType.PositionZ, frame, defaultState.Position.Z);
+                Vector3 pos = new Vector3(posX, posY, posZ);
 
-                if (posTrack == null || rotTrack == null || scaleTrack == null) continue;
+                var defaultEuler = AnimationHelpers.ToEulerAngles(defaultState.Rotation);
+                Quaternion rot = AnimationHelpers.EvaluateRotation(obj, frame, defaultEuler);
 
-                var pos = AnimationHelpers.GetInterpolatedVector3(posTrack, frame, defaultState.Position) ?? defaultState.Position;
-                var rot = AnimationHelpers.GetInterpolatedQuaternion(rotTrack, frame, defaultState.Rotation) ?? defaultState.Rotation;
-                var scale = AnimationHelpers.GetInterpolatedVector3(scaleTrack, frame, defaultState.Scale) ?? defaultState.Scale;
+                float scaleX = EvaluateProperty(obj, PropertyType.ScaleX, frame, defaultState.Scale.X);
+                float scaleY = EvaluateProperty(obj, PropertyType.ScaleY, frame, defaultState.Scale.Y);
+                float scaleZ = EvaluateProperty(obj, PropertyType.ScaleZ, frame, defaultState.Scale.Z);
+                Vector3 scale = new Vector3(scaleX, scaleY, scaleZ);
 
-                matrices[boneName] = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(rot) * Matrix4x4.CreateTranslation(pos);
+                matrices[obj.Name] = Matrix4x4.CreateScale(scale) * 
+                                     Matrix4x4.CreateFromQuaternion(rot) * 
+                                     Matrix4x4.CreateTranslation(pos);
             }
 
             if (matrices.Count > 0)
@@ -55,7 +60,8 @@ namespace TimelineAnimator.Sequencers
         {
             ImGui.Separator();
 
-            bool isTrackContext = State.contextTrackIndex >= 0 && State.contextTrackIndex < Sequence.Tracks.Count;
+            var rows = GetFlattenedRows();
+            bool isTrackContext = State.contextTrackIndex >= 0 && State.contextTrackIndex < rows.Count;
 
             if (!modifierHeld) ImGui.BeginDisabled();
             
@@ -78,31 +84,18 @@ namespace TimelineAnimator.Sequencers
                 ImGui.SetTooltip($"Hold {Services.Configuration.ModifierKey} to delete this track.");
             }
         }
+        
         public override void RebuildHierarchy()
         {
-            foreach (var track in Sequence.Tracks)
+            foreach (var obj in Clip.Objects)
             {
-                if (track is FolderTrack && FullSkeletonHierarchy.TryGetValue(track.Name, out var trueParent))
+                if (FullSkeletonHierarchy.TryGetValue(obj.Name, out var trueParentName))
                 {
-                    track.ParentName = trueParent;
+                    var parentObj = Clip.Objects.FirstOrDefault(o => o.Name == trueParentName);
+                    if (parentObj != null) obj.ParentId = parentObj.Id;
                 }
             }
 
-            var existingTrackNames = Sequence.Tracks.Select(t => t.Name).ToHashSet();
-
-            foreach (var track in Sequence.Tracks)
-            {
-                if (track is FolderTrack)
-                {
-                    string p = track.ParentName;
-                    while (!string.IsNullOrEmpty(p) && !existingTrackNames.Contains(p))
-                    {
-                        if (FullSkeletonHierarchy.TryGetValue(p, out var grandParent)) p = grandParent;
-                        else p = string.Empty;
-                    }
-                    track.ParentName = p;
-                }
-            }
             base.RebuildHierarchy();
         }
     }

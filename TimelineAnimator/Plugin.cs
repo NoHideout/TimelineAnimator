@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Command;
@@ -7,7 +6,6 @@ using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using TimelineAnimator.Data;
 using TimelineAnimator.Windows;
 
 namespace TimelineAnimator
@@ -27,7 +25,7 @@ namespace TimelineAnimator
         private ConfigWindow ConfigWindow { get; set; }
         private MainWindow MainWindow { get; set; }
         private TutorialWindow TutorialWindow { get; set; }
-        private EasingWindow EasingWindow { get; set; }
+        private GraphEditorWindow GraphEditorWindow { get; set; }
 
         public Plugin(IDalamudPluginInterface pluginInterface)
         {
@@ -81,12 +79,12 @@ namespace TimelineAnimator
                     ]
                 };
                 TutorialWindow = new TutorialWindow();
-                EasingWindow = new EasingWindow();
+                GraphEditorWindow = new GraphEditorWindow();
 
                 windowSystem.AddWindow(ConfigWindow);
                 windowSystem.AddWindow(MainWindow);
                 windowSystem.AddWindow(TutorialWindow);
-                windowSystem.AddWindow(EasingWindow);
+                windowSystem.AddWindow(GraphEditorWindow);
                 pluginInterface.UiBuilder.DisableGposeUiHide = true;
 
                 Services.CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
@@ -99,7 +97,7 @@ namespace TimelineAnimator
                 pluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
 
                 Services.Framework.Update += OnFrameworkUpdate;
-                Services.WorkspaceService.EditEasingRequested += OpenEasingUiForKeyframes;
+                Services.WorkspaceService.EditGraphRequested += _ => OpenGraphEditor();
 
                 Services.Log.Information($"Found {PosingPluginIpcName}");
                 isInitialized = true;
@@ -129,12 +127,12 @@ namespace TimelineAnimator
 
             windowSystem.RemoveAllWindows();
 
-            Services.WorkspaceService.EditEasingRequested -= OpenEasingUiForKeyframes;
-
+            Services.WorkspaceService.EditGraphRequested -= _ => OpenGraphEditor();
+            
             ConfigWindow?.Dispose();
             MainWindow?.Dispose();
 
-            EasingWindow?.Dispose();
+            GraphEditorWindow?.Dispose();
             TutorialWindow?.Dispose();
 
             Services.CommandManager.RemoveHandler(CommandName);
@@ -155,6 +153,7 @@ namespace TimelineAnimator
             }
 
             Services.PlaybackService.Update((float)framework.UpdateDelta.TotalSeconds);
+            Services.AutosaveService.Update((float)framework.UpdateDelta.TotalSeconds);
 
             if (Services.InputManager.IsTogglePlaybackPressed())
             {
@@ -184,7 +183,7 @@ namespace TimelineAnimator
         {
             MainWindow.IsOpen = false;
             TutorialWindow.IsOpen = false;
-            EasingWindow.IsOpen = false;
+            GraphEditorWindow.IsOpen = false;
         }
 
         private void OnCommand(string command, string args)
@@ -196,15 +195,9 @@ namespace TimelineAnimator
         private void ToggleMainUi() => MainWindow?.Toggle();
         public void ToggleTutorialWindow() => TutorialWindow?.Toggle();
 
-        private void OpenEasingUiForKeyframes(List<ITrackKeyframe>? keyframes)
+        private void OpenGraphEditor()
         {
-            EasingWindow?.SetKeyframes(keyframes);
-            EasingWindow?.IsOpen = true;
-        }
-
-        public void UpdateEasingUiKeyframes(List<ITrackKeyframe>? keyframes)
-        {
-            EasingWindow?.SetKeyframes(keyframes);
+            if (GraphEditorWindow != null) GraphEditorWindow.IsOpen = true;
         }
     }
 }

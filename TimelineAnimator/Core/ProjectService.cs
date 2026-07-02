@@ -12,12 +12,12 @@ namespace TimelineAnimator.Core
     {
         public List<ISequencer> Sequencers { get; private set; } = new();
 
-        public int GetGlobalMinFrame() => Sequencers.Count == 0 ? 0 : Sequencers.Min(s => s.Sequence.FrameMin);
-        public int GetGlobalMaxFrame() => Sequencers.Count == 0 ? 100 : Sequencers.Max(s => s.Sequence.FrameMax);
+        public int GetGlobalMinFrame() => Sequencers.Count == 0 ? 0 : Sequencers.Min(s => s.Clip.StartFrame);
+        public int GetGlobalMaxFrame() => Sequencers.Count == 0 ? 100 : Sequencers.Max(s => s.Clip.EndFrame);
 
         public void SetMaxFrameForAll(int max)
         {
-            foreach (var s in Sequencers) s.Sequence.FrameMax = max;
+            foreach (var s in Sequencers) s.Clip.EndFrame = max;
         }
 
         public void ClearProject()
@@ -35,8 +35,8 @@ namespace TimelineAnimator.Core
             }
 
             var camSequencer = new CameraSequencer();
-            camSequencer.Sequence.FrameMax = GetGlobalMaxFrame();
-
+            camSequencer.Clip.EndFrame = GetGlobalMaxFrame();
+            
             Sequencers.Add(camSequencer);
             return camSequencer;
         }
@@ -84,103 +84,26 @@ namespace TimelineAnimator.Core
 
         private AnimationFile? GetAnimationData(ISequencer activeSequencer)
         {
-            var animationFile = new AnimationFile
+            return new AnimationFile
             {
-                StartFrame = activeSequencer.Sequence.FrameMin,
-                EndFrame = activeSequencer.Sequence.FrameMax,
-                AnimationType = activeSequencer is CameraSequencer ? "Camera" : "Actor"
+                AnimationType = activeSequencer is CameraSequencer ? "Camera" : "Actor",
+                Clip = activeSequencer.Clip
             };
-
-            foreach (var (TrackName, transform) in activeSequencer.DefaultPose)
-                animationFile.BaseState[TrackName] = transform;
-
-            foreach (var abstractTrack in activeSequencer.Sequence.Tracks)
-            {
-                var animationTrack = new AnimationTrack 
-                { 
-                    TrackName = abstractTrack.Name,
-                    Type = abstractTrack.Type,
-                    ParentName = abstractTrack.ParentName ?? string.Empty
-                };
-
-                foreach (var kf in abstractTrack.GetUntypedKeyframes())
-                {
-                    var skf = new SerializedKeyframe
-                    {
-                        Frame = kf.Frame, Shape = kf.Shape, CustomColor = kf.CustomColor, P1 = kf.P1, P2 = kf.P2
-                    };
-
-                    if (abstractTrack is TimelineTrack<Vector3> v3t) skf.VectorValue = ((TrackKeyframe<Vector3>)kf).Value;
-                    else if (abstractTrack is TimelineTrack<Quaternion> qt) skf.QuatValue = ((TrackKeyframe<Quaternion>)kf).Value;
-                    else if (abstractTrack is TimelineTrack<float> ft) skf.FloatValue = ((TrackKeyframe<float>)kf).Value;
-
-                    animationTrack.Keyframes.Add(skf);
-                }
-                animationFile.Tracks.Add(animationTrack);
-            }
-
-            return animationFile;
         }
 
         private void ApplyAnimationData(AnimationFile animationFile, ISequencer activeSequencer)
         {
-            activeSequencer.DefaultPose = new Dictionary<string, TransformState>(animationFile.BaseState);
-            activeSequencer.Sequence.Tracks.Clear();
-            activeSequencer.Sequence.FrameMax = animationFile.EndFrame;
+            activeSequencer.Clip.Name = animationFile.Clip.Name;
+            activeSequencer.Clip.StartFrame = animationFile.Clip.StartFrame;
+            activeSequencer.Clip.EndFrame = animationFile.Clip.EndFrame;
+            activeSequencer.Clip.FrameRate = animationFile.Clip.FrameRate;
+    
+            activeSequencer.Clip.BasePose = animationFile.Clip.BasePose;
 
-            foreach (var trackData in animationFile.Tracks)
-            {
-                TimelineTrack newTrack = null;
-
-                if (trackData.Type == TrackType.Folder)
-                {
-                    newTrack = new FolderTrack(trackData.TrackName) { ParentName = trackData.ParentName };
-                    activeSequencer.Sequence.Tracks.Add(newTrack);
-                }
-                else if (trackData.Type == TrackType.Vector3)
-                {
-                    var t = activeSequencer.Sequence.AddTrack<Vector3>(trackData.TrackName, TrackType.Vector3);
-                    t.ParentName = trackData.ParentName;
-                    foreach (var kf in trackData.Keyframes)
-                    {
-                        var newKf = t.AddKeyframe(kf.Frame, kf.VectorValue);
-                        newKf.P1 = kf.P1; newKf.P2 = kf.P2; newKf.Shape = kf.Shape; newKf.CustomColor = kf.CustomColor;
-                    }
-                    newTrack = t;
-                }
-                else if (trackData.Type == TrackType.Quaternion)
-                {
-                    var t = activeSequencer.Sequence.AddTrack<Quaternion>(trackData.TrackName, TrackType.Quaternion);
-                    t.ParentName = trackData.ParentName;
-                    foreach (var kf in trackData.Keyframes)
-                    {
-                        var newKf = t.AddKeyframe(kf.Frame, kf.QuatValue);
-                        newKf.P1 = kf.P1; newKf.P2 = kf.P2; newKf.Shape = kf.Shape; newKf.CustomColor = kf.CustomColor;
-                    }
-                    newTrack = t;
-                }
-                else if (trackData.Type == TrackType.Float)
-                {
-                    var t = activeSequencer.Sequence.AddTrack<float>(trackData.TrackName, TrackType.Float);
-                    t.ParentName = trackData.ParentName;
-                    foreach (var kf in trackData.Keyframes)
-                    {
-                        var newKf = t.AddKeyframe(kf.Frame, kf.FloatValue);
-                        newKf.P1 = kf.P1; newKf.P2 = kf.P2; newKf.Shape = kf.Shape; newKf.CustomColor = kf.CustomColor;
-                    }
-                    newTrack = t;
-                }
-
-                if (newTrack != null)
-                {
-                    if (trackData.TrackName.EndsWith("_Position")) newTrack.DisplayName = "Position";
-                    else if (trackData.TrackName.EndsWith("_Rotation")) newTrack.DisplayName = "Rotation";
-                    else if (trackData.TrackName.EndsWith("_Scale")) newTrack.DisplayName = "Scale";
-                    else if (trackData.TrackName.EndsWith("_FOV")) newTrack.DisplayName = "Field of View";
-                }
-            }
-
+            activeSequencer.Clip.Objects.Clear();
+            activeSequencer.Clip.Objects.AddRange(animationFile.Clip.Objects);
             activeSequencer.RebuildHierarchy();
+
             Services.PlaybackService.Stop();
         }
     }

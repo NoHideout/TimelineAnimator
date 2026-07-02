@@ -26,23 +26,21 @@ namespace TimelineAnimator.ImSequencer
     {
         public float framePixelWidth = 10f;
         public HashSet<SelectedKeyframe> SelectedKeyframes = new();
-
         public float LegendWidth = 180f;
 
         public bool IsDraggingSplitter = false;
-
         public bool MovingCurrentFrame = false;
         public int movingPos = -1;
         public bool IsDragging = false;
-
+        
         public bool IsBoxSelecting = false;
         public Vector2 BoxSelectionStart;
         public Vector2 BoxSelectionEnd;
-
+        
         public ZoomScrollbar.State ZoomState = new();
-
+        
         internal int contextTrackIndex = -1;
-        internal ITrackKeyframe? contextKeyframe = null;
+        internal CurveKeyframe? contextKeyframe = null;
         internal int contextMouseFrame = -1;
     }
 }

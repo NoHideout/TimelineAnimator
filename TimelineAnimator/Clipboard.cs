@@ -8,13 +8,13 @@ namespace TimelineAnimator
     {
         public class CopiedKeyframe
         {
-            public ITrackKeyframe Keyframe { get; }
-            public int TrackIndex { get; }
+            public CurveKeyframe Keyframe { get; }
+            public Guid TrackId { get; }
 
-            public CopiedKeyframe(ITrackKeyframe keyframe, int trackIndex)
+            public CopiedKeyframe(CurveKeyframe keyframe, Guid trackId)
             {
                 Keyframe = keyframe;
-                TrackIndex = trackIndex;
+                TrackId = trackId;
             }
         }
 
@@ -22,14 +22,14 @@ namespace TimelineAnimator
 
         public static bool HasData => data.Count > 0;
 
-        public static void Copy(List<ITrackKeyframe> keyframes, Dictionary<Guid, int> trackMap)
+        public static void Copy(List<CurveKeyframe> keyframes, Dictionary<Guid, Guid> trackMap)
         {
             data.Clear();
             foreach (var kf in keyframes)
             {
-                if (trackMap.TryGetValue(kf.Id, out var trackIndex))
+                if (trackMap.TryGetValue(kf.Id, out var trackId))
                 {
-                    data.Add(new CopiedKeyframe(kf, trackIndex));
+                    data.Add(new CopiedKeyframe(kf, trackId));
                 }
             }
         }
