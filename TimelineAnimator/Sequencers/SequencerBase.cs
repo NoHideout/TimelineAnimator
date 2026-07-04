@@ -24,12 +24,25 @@ namespace TimelineAnimator.Sequencers
             void AddObj(AnimationObject obj, int depth)
             {
                 rows.Add(new SequencerRow { Id = obj.Id, AnimObject = obj, Name = obj.Name, Depth = depth });
-                foreach (var t in obj.Tracks) 
-                    rows.Add(new SequencerRow { Id = t.Id, PropTrack = t, Name = t.Property.ToString(), Depth = depth + 1 });
-                foreach (var child in Clip.Objects.Where(o => o.ParentId == obj.Id)) 
+                
+                if (obj.Tracks.Count > 0)
+                {
+                    byte[] guidBytes = obj.Id.ToByteArray();
+                    guidBytes[15] ^= 0xFF;
+                    Guid transformId = new Guid(guidBytes);
+
+                    rows.Add(new SequencerRow { Id = transformId, AnimObject = obj, Name = "Transform", Depth = depth + 1 });
+
+                    foreach (var t in obj.Tracks)
+                        rows.Add(new SequencerRow { Id = t.Id, PropTrack = t, Name = t.Property.ToString(), Depth = depth + 2 });
+                }
+
+                foreach (var child in Clip.Objects.Where(o => o.ParentId == obj.Id))
                     AddObj(child, depth + 1);
             }
+            
             foreach (var root in Clip.Objects.Where(o => !o.ParentId.HasValue)) AddObj(root, 0);
+            
             return rows;
         }
 

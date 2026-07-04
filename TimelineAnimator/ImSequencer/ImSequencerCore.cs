@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Dalamud.Bindings.ImGui;
 using System.Numerics;
+using Dalamud.Interface;
 using TimelineAnimator.Data;
 
 namespace TimelineAnimator.ImSequencer
@@ -39,8 +40,6 @@ namespace TimelineAnimator.ImSequencer
         public ImGuiCol Color_Stripe_2 => ImGuiCol.FrameBgHovered;
         public float Color_Content_Lines_Alpha => 0.188f;
         public float Color_Selection_Alpha => 0.25f;
-        public ImGuiCol Color_Keyframe_Hover => ImGuiCol.ResizeGripActive;
-        public ImGuiCol Color_Keyframe_Selected => ImGuiCol.PlotLinesHovered;
         public ImGuiCol Color_Keyframe_Default => ImGuiCol.TabHovered;
         public ImGuiCol Color_Playhead => ImGuiCol.ButtonActive;
         public ImGuiCol Color_Playhead_Text => ImGuiCol.Text;
@@ -59,35 +58,58 @@ namespace TimelineAnimator.ImSequencer
             public int ItemHeight;
         }
 
-        public bool Draw(string sequenceName, ImSequencerState state, AnimationClip clip, ref int currentFrame, ref int selectedEntry, bool modifierHeld)
+public bool Draw(string sequenceName, ImSequencerState state, AnimationClip clip, ref int currentFrame,
+            ref int selectedEntry, bool modifierHeld)
         {
             var ret = false;
             var io = ImGui.GetIO();
-            var ItemHeight = 20;
-            float splitterGap = 4f;
-            float scrollbarHeight = 14.0f;
+            int ItemHeight = (int)ImGui.GetFrameHeight();
+            float scaleFactor = ItemHeight / 20.0f;
+            float splitterGap = 4f * scaleFactor;
+            float scrollbarHeight = ImGui.GetStyle().ScrollbarSize;
             bool requestContextMenu = false;
             bool isSplitterHoveredOrActive = false;
-
+            
             var safeTracks = new List<SequencerRow>();
+
             void AddObjectAndChildren(AnimationObject obj, int depth)
             {
-                safeTracks.Add(new SequencerRow {
+                safeTracks.Add(new SequencerRow
+                {
                     Name = obj.Name, DisplayName = obj.DisplayName,
                     Id = obj.Id, ParentId = obj.ParentId, Depth = depth,
                     IsExpanded = obj.IsExpanded,
                     HasChildren = obj.Tracks.Count > 0 || clip.Objects.Any(o => o.ParentId == obj.Id),
                     AnimObject = obj
                 });
-                foreach (var track in obj.Tracks)
+
+                if (obj.Tracks.Count > 0)
                 {
-                    safeTracks.Add(new SequencerRow {
-                        Name = $"{obj.Name}_{track.Property}", DisplayName = track.Property.ToString(),
-                        Id = track.Id, ParentId = obj.Id, Depth = depth + 1,
-                        IsExpanded = true, HasChildren = false,
-                        PropTrack = track
+                    byte[] guidBytes = obj.Id.ToByteArray();
+                    guidBytes[15] ^= 0xFF; 
+                    Guid transformId = new Guid(guidBytes);
+
+                    safeTracks.Add(new SequencerRow
+                    {
+                        Name = "Transform", DisplayName = "Transform",
+                        Id = transformId, ParentId = obj.Id, Depth = depth + 1,
+                        IsExpanded = obj.IsPropertiesExpanded,
+                        HasChildren = true,
+                        AnimObject = obj
                     });
+
+                    foreach (var track in obj.Tracks)
+                    {
+                        safeTracks.Add(new SequencerRow
+                        {
+                            Name = $"{obj.Name}_{track.Property}", DisplayName = track.Property.ToString(),
+                            Id = track.Id, ParentId = transformId, Depth = depth + 2,
+                            IsExpanded = true, HasChildren = false,
+                            PropTrack = track
+                        });
+                    }
                 }
+
                 foreach (var child in clip.Objects.Where(o => o.ParentId == obj.Id))
                 {
                     AddObjectAndChildren(child, depth + 1);
@@ -101,7 +123,7 @@ namespace TimelineAnimator.ImSequencer
 
             var visibleTracks = new List<SequencerRow>();
             var expandedParents = new HashSet<Guid>();
-            
+
             foreach (var t in safeTracks)
             {
                 bool hasNoLoadedParent = !t.ParentId.HasValue;
@@ -119,20 +141,21 @@ namespace TimelineAnimator.ImSequencer
                 var parentDrawList = ImGui.GetWindowDrawList();
                 var canvasPos = ImGui.GetCursorScreenPos();
                 var canvasSize = ImGui.GetContentRegionAvail();
-                
+
                 float maxLegendWidth = Math.Max(50f, canvasSize.X - 50f);
                 state.LegendWidth = Math.Clamp(state.LegendWidth, 50f, maxLegendWidth);
                 float leftOffset = state.LegendWidth + splitterGap;
                 var viewWidthPixels = Math.Max(1f, canvasSize.X - leftOffset - ImGui.GetStyle().ScrollbarSize);
-                
+
                 state.ZoomState.MinViewSpan = Math.Max(state.ZoomState.MinViewSpan, 5);
                 CalculateZoomAndSpan(state, clip, viewWidthPixels);
                 int firstFrameUsed = (int)Math.Round(state.ZoomState.ViewMin);
 
                 DrawHeader(state, clip, canvasPos, canvasSize, leftOffset, ItemHeight);
 
-                ImGui.SetCursorScreenPos(new Vector2(canvasPos.X + state.LegendWidth - 3f, canvasPos.Y));
-                ImGui.InvisibleButton("##headerSplitter", new Vector2(8f, ItemHeight));
+                ImGui.SetCursorScreenPos(new Vector2(canvasPos.X + state.LegendWidth - (3f * scaleFactor),
+                    canvasPos.Y));
+                ImGui.InvisibleButton("##headerSplitter", new Vector2(8f * scaleFactor, ItemHeight));
                 if (ImGui.IsItemActive()) state.LegendWidth += io.MouseDelta.X;
                 if (ImGui.IsItemHovered() || ImGui.IsItemActive())
                 {
@@ -141,7 +164,8 @@ namespace TimelineAnimator.ImSequencer
                 }
 
                 float spacingY = ImGui.GetStyle().ItemSpacing.Y;
-                var childFrameSize = new Vector2(canvasSize.X, Math.Max(10, canvasSize.Y - ItemHeight - scrollbarHeight - (spacingY * 2)));
+                var childFrameSize = new Vector2(canvasSize.X,
+                    Math.Max(10, canvasSize.Y - ItemHeight - scrollbarHeight - (spacingY * 2)));
                 float totalUiHeight = ItemHeight + childFrameSize.Y + scrollbarHeight;
 
                 ImGui.SetCursorScreenPos(new Vector2(canvasPos.X, canvasPos.Y + ItemHeight));
@@ -153,11 +177,12 @@ namespace TimelineAnimator.ImSequencer
                     var controlHeight = Math.Max(visibleTracks.Count * ItemHeight, ImGui.GetContentRegionAvail().Y);
                     ImGui.InvisibleButton("contentBar", new Vector2(childWidth, controlHeight));
                     ImGui.SetItemAllowOverlap();
-                    
+
                     var contentMin = ImGui.GetItemRectMin();
                     var itemMax = ImGui.GetItemRectMax();
-                    var contentMax = new Vector2(itemMax.X, Math.Max(itemMax.Y, canvasPos.Y + ItemHeight + childFrameSize.Y));
-                    
+                    var contentMax = new Vector2(itemMax.X,
+                        Math.Max(itemMax.Y, canvasPos.Y + ItemHeight + childFrameSize.Y));
+
                     var ctx = new RenderContext
                     {
                         DrawList = ImGui.GetWindowDrawList(),
@@ -167,26 +192,29 @@ namespace TimelineAnimator.ImSequencer
                         LegendWidth = state.LegendWidth, LeftOffset = leftOffset, ItemHeight = ItemHeight
                     };
 
-                    int totalPossibleStripes = (int)((ctx.ContentMax.Y - ctx.ContentMin.Y) / ctx.ItemHeight);
+                    int totalPossibleStripes =
+                        (int)Math.Ceiling((ctx.ContentMax.Y - ctx.ContentMin.Y) / ctx.ItemHeight) + 1;
                     DrawTrackStripes(ctx, Math.Max(visibleTracks.Count, totalPossibleStripes));
                     DrawGridLines(ctx, state, clip);
                     DrawHeaderTicks(ctx, state, clip);
                     DrawLegend(ctx, safeTracks, visibleTracks, ref selectedEntry);
 
-                    bool clickedOnKeyframe = DrawKeyframes(ctx, state, safeTracks, visibleTracks, modifierHeld, ref requestContextMenu);
+                    bool clickedOnKeyframe = DrawKeyframes(ctx, state, safeTracks, visibleTracks, modifierHeld,
+                        ref requestContextMenu);
 
                     if (!state.IsDraggingSplitter)
                     {
-                        HandleSelectionAndInput(ctx, state, safeTracks, visibleTracks, ref selectedEntry, modifierHeld, clickedOnKeyframe, ref requestContextMenu);
+                        HandleSelectionAndInput(ctx, state, safeTracks, visibleTracks, ref selectedEntry, modifierHeld,
+                            clickedOnKeyframe, ref requestContextMenu);
                         HandlePlayhead(ctx, state, clip, ref currentFrame, firstFrameUsed);
                     }
 
                     if (state.IsDragging) ret = ProcessDragging(ctx, state, safeTracks, clip);
 
                     float scrollY = ImGui.GetScrollY();
-                    ImGui.SetCursorPos(new Vector2(state.LegendWidth - 3f, scrollY));
-                    ImGui.InvisibleButton("##timelineSplitter", new Vector2(8f, childFrameSize.Y));
-                    
+                    ImGui.SetCursorPos(new Vector2(state.LegendWidth - (3f * scaleFactor), scrollY));
+                    ImGui.InvisibleButton("##timelineSplitter", new Vector2(8f * scaleFactor, childFrameSize.Y));
+
                     if (ImGui.IsItemActive()) state.LegendWidth += io.MouseDelta.X;
                     if (ImGui.IsItemHovered() || ImGui.IsItemActive())
                     {
@@ -202,8 +230,9 @@ namespace TimelineAnimator.ImSequencer
 
                 DrawScrollbar(state, viewWidthPixels, leftOffset, scrollbarHeight);
 
-                ImGui.SetCursorScreenPos(new Vector2(canvasPos.X + state.LegendWidth - 3f, canvasPos.Y + ItemHeight + childFrameSize.Y));
-                ImGui.InvisibleButton("##scrollSplitter", new Vector2(8f, scrollbarHeight));
+                ImGui.SetCursorScreenPos(new Vector2(canvasPos.X + state.LegendWidth - (3f * scaleFactor),
+                    canvasPos.Y + ItemHeight + childFrameSize.Y));
+                ImGui.InvisibleButton("##scrollSplitter", new Vector2(8f * scaleFactor, scrollbarHeight));
                 if (ImGui.IsItemActive()) state.LegendWidth += io.MouseDelta.X;
                 if (ImGui.IsItemHovered() || ImGui.IsItemActive())
                 {
@@ -212,7 +241,9 @@ namespace TimelineAnimator.ImSequencer
                 }
 
                 state.LegendWidth = Math.Clamp(state.LegendWidth, 50f, maxLegendWidth);
-                uint splitLineColor = isSplitterHoveredOrActive ? ImGui.GetColorU32(ImGuiCol.SeparatorHovered) : ImGui.GetColorU32(Color_Header_Lines);
+                uint splitLineColor = isSplitterHoveredOrActive
+                    ? ImGui.GetColorU32(ImGuiCol.SeparatorHovered)
+                    : ImGui.GetColorU32(Color_Header_Lines);
                 parentDrawList.AddLine(
                     new Vector2(canvasPos.X + state.LegendWidth + 1f, canvasPos.Y),
                     new Vector2(canvasPos.X + state.LegendWidth + 1f, canvasPos.Y + totalUiHeight),
@@ -231,8 +262,9 @@ namespace TimelineAnimator.ImSequencer
         {
             state.ZoomState.ContentMin = clip.StartFrame;
             state.ZoomState.ContentMax = clip.EndFrame;
-            if (state.ZoomState.ContentMax <= state.ZoomState.ContentMin) state.ZoomState.ContentMax = state.ZoomState.ContentMin + 1;
-            
+            if (state.ZoomState.ContentMax <= state.ZoomState.ContentMin)
+                state.ZoomState.ContentMax = state.ZoomState.ContentMin + 1;
+
             double contentSpan = state.ZoomState.ContentMax - state.ZoomState.ContentMin;
             if (state.ZoomState.MinViewSpan <= 0) state.ZoomState.MinViewSpan = 1;
             if (state.ZoomState.MinViewSpan > contentSpan) state.ZoomState.MinViewSpan = contentSpan;
@@ -241,25 +273,30 @@ namespace TimelineAnimator.ImSequencer
             {
                 state.ZoomState.ViewMin = clip.StartFrame;
                 double initialSpan = viewWidthPixels / state.framePixelWidth;
-                state.ZoomState.ViewMax = state.ZoomState.ViewMin + (initialSpan <= 0 || double.IsNaN(initialSpan) ? 100 : initialSpan);
+                state.ZoomState.ViewMax = state.ZoomState.ViewMin +
+                                          (initialSpan <= 0 || double.IsNaN(initialSpan) ? 100 : initialSpan);
             }
 
-            double viewMinLimit = Math.Max(state.ZoomState.ContentMin, state.ZoomState.ContentMax - state.ZoomState.MinViewSpan);
+            double viewMinLimit = Math.Max(state.ZoomState.ContentMin,
+                state.ZoomState.ContentMax - state.ZoomState.MinViewSpan);
             state.ZoomState.ViewMin = Math.Clamp(state.ZoomState.ViewMin, state.ZoomState.ContentMin, viewMinLimit);
-            
-            double viewMaxLimit = Math.Min(state.ZoomState.ContentMax, state.ZoomState.ViewMin + state.ZoomState.MinViewSpan);
+
+            double viewMaxLimit = Math.Min(state.ZoomState.ContentMax,
+                state.ZoomState.ViewMin + state.ZoomState.MinViewSpan);
             state.ZoomState.ViewMax = Math.Clamp(state.ZoomState.ViewMax, viewMaxLimit, state.ZoomState.ContentMax);
-            
+
             double viewSpan = Math.Max(state.ZoomState.ViewMax - state.ZoomState.ViewMin, 1);
             state.framePixelWidth = (float)(viewWidthPixels / viewSpan);
         }
 
-        private void DrawHeader(ImSequencerState state, AnimationClip clip, Vector2 canvasPos, Vector2 canvasSize, float leftOffset, int itemHeight)
+        private void DrawHeader(ImSequencerState state, AnimationClip clip, Vector2 canvasPos, Vector2 canvasSize,
+            float leftOffset, int itemHeight)
         {
             float headerWidth = canvasSize.X - ImGui.GetStyle().ScrollbarSize;
             var headerSize = new Vector2(headerWidth, itemHeight);
             ImGui.InvisibleButton("topBar", headerSize);
-            ImGui.GetWindowDrawList().AddRectFilled(canvasPos, canvasPos + headerSize, ImGui.GetColorU32(Color_Header_Background));
+            ImGui.GetWindowDrawList().AddRectFilled(canvasPos, canvasPos + headerSize,
+                ImGui.GetColorU32(Color_Header_Background));
             ImGui.GetWindowDrawList().AddLine(
                 new Vector2(canvasPos.X, canvasPos.Y + itemHeight),
                 new Vector2(canvasPos.X + headerWidth, canvasPos.Y + itemHeight),
@@ -290,10 +327,12 @@ namespace TimelineAnimator.ImSequencer
             uint lineColor = ImGui.GetColorU32(new Vector4(1, 1, 1, Color_Content_Lines_Alpha));
             for (var i = clip.StartFrame; i <= clip.EndFrame; i += frameStep)
             {
-                var px = (float)(ctx.ContentMin.X + (i - state.ZoomState.ViewMin) * state.framePixelWidth + ctx.LeftOffset);
+                var px = (float)(ctx.ContentMin.X + (i - state.ZoomState.ViewMin) * state.framePixelWidth +
+                                 ctx.LeftOffset);
                 if (px <= ctx.ContentMax.X && px >= ctx.ContentMin.X + ctx.LeftOffset)
                 {
-                    ctx.DrawList.AddLine(new Vector2(px, ctx.ContentMin.Y), new Vector2(px, ctx.ContentMax.Y), lineColor, 1);
+                    ctx.DrawList.AddLine(new Vector2(px, ctx.ContentMin.Y), new Vector2(px, ctx.ContentMax.Y),
+                        lineColor, 1);
                 }
             }
         }
@@ -311,22 +350,28 @@ namespace TimelineAnimator.ImSequencer
             var halfModFrameCount = modFrameCount / 2;
             uint textColor = ImGui.GetColorU32(Color_Header_Text);
             uint lineColor = ImGui.GetColorU32(Color_Header_Lines);
-            
+
             Action<int, int> drawLine = (i, regionHeight) =>
             {
                 var baseIndex = i % modFrameCount == 0 || i == clip.EndFrame || i == clip.StartFrame;
                 var halfIndex = i % halfModFrameCount == 0;
-                var px = (float)(ctx.ContentMin.X + (i - state.ZoomState.ViewMin) * state.framePixelWidth + ctx.LeftOffset);
-                var tiretStart = baseIndex ? 4 : halfIndex ? 10 : 14;
-                var tiretEnd = baseIndex ? regionHeight : ctx.ItemHeight;
-                
+                var px = (float)(ctx.ContentMin.X + (i - state.ZoomState.ViewMin) * state.framePixelWidth +
+                                 ctx.LeftOffset);
+
+                float tiretStart = baseIndex ? ctx.ItemHeight * 0.2f :
+                    halfIndex ? ctx.ItemHeight * 0.5f : ctx.ItemHeight * 0.7f;
+                float tiretEnd = regionHeight;
+
                 if (px <= ctx.ContentMax.X && px >= ctx.ContentMin.X + ctx.LeftOffset)
                 {
-                    ctx.ParentDrawList.AddLine(new Vector2(px, ctx.CanvasPos.Y + tiretStart), new Vector2(px, ctx.CanvasPos.Y + tiretEnd - 1), lineColor, 1);
+                    ctx.ParentDrawList.AddLine(new Vector2(px, ctx.CanvasPos.Y + tiretStart),
+                        new Vector2(px, ctx.CanvasPos.Y + tiretEnd - 1), lineColor, 1);
                 }
+
                 if (baseIndex && px >= ctx.ContentMin.X + ctx.LeftOffset && px <= ctx.ContentMax.X)
                 {
-                    ctx.ParentDrawList.AddText(new Vector2(px + 3f, ctx.CanvasPos.Y), textColor, $"{i}");
+                    float textY = ctx.CanvasPos.Y + (int)((ctx.ItemHeight - ImGui.GetTextLineHeight()) * 0.5f);
+                    ctx.ParentDrawList.AddText(new Vector2(px + 4f, textY), textColor, $"{i}");
                 }
             };
 
@@ -335,25 +380,33 @@ namespace TimelineAnimator.ImSequencer
             drawLine(clip.EndFrame, ctx.ItemHeight);
         }
 
-        private void DrawLegend(RenderContext ctx, List<SequencerRow> safeTracks, List<SequencerRow> visibleTracks, ref int selectedEntry)
+private void DrawLegend(RenderContext ctx, List<SequencerRow> safeTracks, List<SequencerRow> visibleTracks,
+            ref int selectedEntry)
         {
-            ctx.DrawList.PushClipRect(ctx.ContentMin, new Vector2(ctx.ContentMin.X + ctx.LegendWidth, ctx.ContentMax.Y), true);
+            float clipTop = ctx.CanvasPos.Y - 10000f;
+            float clipBottom = ctx.CanvasPos.Y + 10000f;
+            ctx.DrawList.PushClipRect(new Vector2(ctx.ContentMin.X, clipTop),
+                new Vector2(ctx.ContentMin.X + ctx.LegendWidth, clipBottom), true);
             try
             {
+                float textHeight = ImGui.GetTextLineHeight();
+
                 for (int i = 0; i < visibleTracks.Count; i++)
                 {
                     var track = visibleTracks[i];
-                    float indent = track.Depth * 14f;
-                    var tPos = new Vector2(ctx.ContentMin.X + 3 + indent, ctx.ContentMin.Y + i * ctx.ItemHeight + 2);
-                    float textIndent = 16f;
-                    
+                    float indent = track.Depth * textHeight;
+
+                    float textY = ctx.ContentMin.Y + i * ctx.ItemHeight + (int)((ctx.ItemHeight - textHeight) * 0.5f);
+                    var tPos = new Vector2(ctx.ContentMin.X + 4f + indent, textY);
+                    float textIndent = textHeight * 1.5f;
+
                     var rowRect = new ImRect(
                         new Vector2(ctx.ContentMin.X, ctx.ContentMin.Y + i * ctx.ItemHeight),
                         new Vector2(ctx.ContentMin.X + ctx.LegendWidth, ctx.ContentMin.Y + (i + 1) * ctx.ItemHeight));
-                        
+
                     var bgCol = (i & 1) != 0 ? ImGui.GetColorU32(Color_Stripe_1) : ImGui.GetColorU32(Color_Stripe_2);
                     ctx.DrawList.AddRectFilled(rowRect.Min, rowRect.Max, bgCol);
-                    
+
                     int absoluteIndex = safeTracks.IndexOf(track);
                     if (selectedEntry == absoluteIndex)
                     {
@@ -364,36 +417,37 @@ namespace TimelineAnimator.ImSequencer
                     bool hoveredArrow = false;
                     if (track.HasChildren)
                     {
-                        var center = new Vector2(tPos.X + 6f, ctx.ContentMin.Y + i * ctx.ItemHeight + (ctx.ItemHeight / 2f));
-                        float s = 4f;
-                        var arrowRect = new ImRect(center - new Vector2(8, 8), center + new Vector2(8, 8));
-                        hoveredArrow = arrowRect.Contains(ctx.IO.MousePos);
-                        uint color = ImGui.GetColorU32(hoveredArrow ? ImGuiCol.Text : ImGuiCol.TextDisabled);
+                        var icon = track.IsExpanded ? FontAwesomeIcon.CaretDown : FontAwesomeIcon.CaretRight;
+                        string iconStr = icon.ToIconString();
                         
-                        if (hoveredArrow && ImGui.IsMouseClicked(0)) 
+                        var iconSize = ImGui.CalcTextSize(iconStr);
+                        var iconPos = new Vector2(ctx.ContentMin.X + 4f + indent, textY);
+                        
+                        var arrowRect = new ImRect(iconPos, iconPos + iconSize);
+                        hoveredArrow = arrowRect.Contains(ctx.IO.MousePos);
+                        
+                        uint color = ImGui.GetColorU32(hoveredArrow ? ImGuiCol.Text : ImGuiCol.TextDisabled);
+
+                        if (hoveredArrow && ImGui.IsMouseClicked(0))
                         {
                             track.IsExpanded = !track.IsExpanded;
-                            if (track.AnimObject != null) track.AnimObject.IsExpanded = track.IsExpanded;
+                            if (track.AnimObject != null)
+                            {
+                                if (track.Name == "Transform")
+                                    track.AnimObject.IsPropertiesExpanded = track.IsExpanded;
+                                else
+                                    track.AnimObject.IsExpanded = track.IsExpanded;
+                            }
                         }
 
-                        if (track.IsExpanded)
-                        {
-                            ctx.DrawList.AddTriangleFilled(
-                                center + new Vector2(-s, -s + 2), center + new Vector2(s, -s + 2),
-                                center + new Vector2(0, s + 2), color);
-                        }
-                        else
-                        {
-                            ctx.DrawList.AddTriangleFilled(
-                                center + new Vector2(-s + 2, -s), center + new Vector2(-s + 2, s),
-                                center + new Vector2(s + 2, 0), color);
-                        }
+                        ctx.DrawList.AddText(Services.PluginInterface.UiBuilder.FontIcon, textHeight, iconPos, color, iconStr);
                     }
 
                     if (!hoveredArrow && rowRect.Contains(ctx.IO.MousePos) && ImGui.IsMouseClicked(0))
                         selectedEntry = absoluteIndex;
-                        
-                    ctx.DrawList.AddText(new Vector2(tPos.X + textIndent, tPos.Y), ImGui.GetColorU32(Color_Legend_Text), track.DisplayName ?? track.Name ?? $"#{i + 1}");
+
+                    ctx.DrawList.AddText(new Vector2(tPos.X + textIndent, tPos.Y), ImGui.GetColorU32(Color_Legend_Text),
+                        track.DisplayName ?? track.Name ?? $"#{i + 1}");
                 }
             }
             finally
@@ -419,15 +473,13 @@ namespace TimelineAnimator.ImSequencer
             if (!isSelected && !isHovered) return baseColor;
 
             Vector4 color = ImGui.ColorConvertU32ToFloat4(baseColor);
-    
             float h = 0f, s = 0f, v = 0f;
             ImGui.ColorConvertRGBtoHSV(color.X, color.Y, color.Z, ref h, ref s, ref v);
-    
+
             if (isSelected)
             {
                 s = Math.Clamp(s * 0.7f, 0.0f, 1.0f);
                 v = Math.Clamp(v + 0.2f, 0.0f, 1.0f);
-                
             }
             else if (isHovered)
             {
@@ -436,14 +488,18 @@ namespace TimelineAnimator.ImSequencer
 
             float r = 0f, g = 0f, b = 0f;
             ImGui.ColorConvertHSVtoRGB(h, s, v, ref r, ref g, ref b);
-    
+
             return ImGui.ColorConvertFloat4ToU32(new Vector4(r, g, b, color.W));
         }
 
-        private bool DrawKeyframes(RenderContext ctx, ImSequencerState state, List<SequencerRow> safeTracks, List<SequencerRow> visibleTracks, bool modifierHeld, ref bool requestContextMenu)
+        private bool DrawKeyframes(RenderContext ctx, ImSequencerState state, List<SequencerRow> safeTracks,
+            List<SequencerRow> visibleTracks, bool modifierHeld, ref bool requestContextMenu)
         {
             bool clickedOnKeyframe = false;
-            ctx.DrawList.PushClipRect(new Vector2(ctx.ContentMin.X + ctx.LeftOffset, ctx.ContentMin.Y), ctx.ContentMax, true);
+            float clipTop = ctx.CanvasPos.Y - 10000f;
+            float clipBottom = ctx.CanvasPos.Y + 10000f;
+            ctx.DrawList.PushClipRect(new Vector2(ctx.ContentMin.X + ctx.LeftOffset, clipTop),
+                new Vector2(ctx.ContentMax.X, clipBottom), true);
 
             try
             {
@@ -452,13 +508,17 @@ namespace TimelineAnimator.ImSequencer
                     var track = visibleTracks[i];
                     int absoluteIndex = safeTracks.IndexOf(track);
                     float y = ctx.ContentMin.Y + ctx.ItemHeight * i + (ctx.ItemHeight / 2f);
-                    
+
                     foreach (var kf in track.Keyframes.ToList())
                     {
-                        float x = (float)(ctx.ContentMin.X + ctx.LeftOffset + (kf.Frame - state.ZoomState.ViewMin) * state.framePixelWidth);
-                        float size = 5f;
+                        float x = (float)(ctx.ContentMin.X + ctx.LeftOffset +
+                                          (kf.Frame - state.ZoomState.ViewMin) * state.framePixelWidth);
 
-                        var keyframeRect = new ImRect(new Vector2(x - size, y - size), new Vector2(x + size, y + size));
+                        float size = ctx.ItemHeight * 0.25f;
+                        float hitRadius = ctx.ItemHeight * 0.4f;
+
+                        var keyframeRect = new ImRect(new Vector2(x - hitRadius, y - hitRadius),
+                            new Vector2(x + hitRadius, y + hitRadius));
                         bool isHovered = keyframeRect.Contains(ctx.IO.MousePos);
                         bool isSelected = state.SelectedKeyframes.Contains(new SelectedKeyframe(absoluteIndex, kf.Id));
 
@@ -466,7 +526,10 @@ namespace TimelineAnimator.ImSequencer
                         {
                             state.contextKeyframe = kf;
                             state.contextTrackIndex = absoluteIndex;
-                            state.contextMouseFrame = (int)Math.Round((ctx.IO.MousePos.X - (ctx.ContentMin.X + ctx.LeftOffset)) / state.framePixelWidth + state.ZoomState.ViewMin);
+                            state.contextMouseFrame =
+                                (int)Math.Round(
+                                    (ctx.IO.MousePos.X - (ctx.ContentMin.X + ctx.LeftOffset)) / state.framePixelWidth +
+                                    state.ZoomState.ViewMin);
                             requestContextMenu = true;
                             clickedOnKeyframe = true;
                         }
@@ -478,6 +541,7 @@ namespace TimelineAnimator.ImSequencer
                                 if (!modifierHeld) state.SelectedKeyframes.Clear();
                                 state.SelectedKeyframes.Add(new SelectedKeyframe(absoluteIndex, kf.Id));
                             }
+
                             state.IsDragging = true;
                             state.movingPos = (int)ctx.IO.MousePos.X;
                             clickedOnKeyframe = true;
@@ -491,17 +555,19 @@ namespace TimelineAnimator.ImSequencer
                             switch (kf.Shape)
                             {
                                 case KeyframeShape.Square:
-                                    ctx.DrawList.AddRectFilled(new Vector2(x - size, y - size), new Vector2(x + size, y + size), drawColor);
+                                    ctx.DrawList.AddRectFilled(new Vector2(x - size, y - size),
+                                        new Vector2(x + size, y + size), drawColor);
                                     break;
-                                    
+
                                 case KeyframeShape.Circle:
                                     ctx.DrawList.AddCircleFilled(new Vector2(x, y), size, drawColor);
                                     break;
-                                    
+
                                 case KeyframeShape.Diamond:
                                 default:
-                                    float dSize = size + 1f;
-                                    var p = new Vector2[] { new(x, y - dSize), new(x + dSize, y), new(x, y + dSize), new(x - dSize, y) };
+                                    float dSize = size + (ctx.ItemHeight * 0.05f);
+                                    var p = new Vector2[]
+                                        { new(x, y - dSize), new(x + dSize, y), new(x, y + dSize), new(x - dSize, y) };
                                     ctx.DrawList.AddConvexPolyFilled(ref p[0], p.Length, drawColor);
                                     break;
                             }
@@ -515,18 +581,23 @@ namespace TimelineAnimator.ImSequencer
             }
 
             return clickedOnKeyframe;
-        }       
-        private void HandleSelectionAndInput(RenderContext ctx, ImSequencerState state, List<SequencerRow> safeTracks, List<SequencerRow> visibleTracks, ref int selectedEntry, bool modifierHeld, bool clickedOnKeyframe, ref bool requestContextMenu)
+        }
+
+        private void HandleSelectionAndInput(RenderContext ctx, ImSequencerState state, List<SequencerRow> safeTracks,
+            List<SequencerRow> visibleTracks, ref int selectedEntry, bool modifierHeld, bool clickedOnKeyframe,
+            ref bool requestContextMenu)
         {
             var contentRect = new ImRect(ctx.ContentMin, ctx.ContentMax);
-            bool clickedOnContent = ImGui.IsMouseClicked(0) && contentRect.Contains(ctx.IO.MousePos) && ImGui.IsWindowFocused();
+            bool clickedOnContent = ImGui.IsMouseClicked(0) && contentRect.Contains(ctx.IO.MousePos) &&
+                                    ImGui.IsWindowFocused();
             bool clickedOnTrackArea = clickedOnContent && ctx.IO.MousePos.X > ctx.ContentMin.X + ctx.LeftOffset;
 
             if (state.IsBoxSelecting)
             {
                 state.BoxSelectionEnd = ctx.IO.MousePos;
-                ctx.DrawList.AddRectFilled(state.BoxSelectionStart, state.BoxSelectionEnd, ImGui.GetColorU32(new Vector4(1, 1, 1, Color_Selection_Alpha)));
-                
+                ctx.DrawList.AddRectFilled(state.BoxSelectionStart, state.BoxSelectionEnd,
+                    ImGui.GetColorU32(new Vector4(1, 1, 1, Color_Selection_Alpha)));
+
                 if (!ctx.IO.MouseDown[0])
                 {
                     state.IsBoxSelecting = false;
@@ -545,17 +616,23 @@ namespace TimelineAnimator.ImSequencer
                 }
             }
 
-            if (ImGui.IsMouseClicked((ImGuiMouseButton)1) && contentRect.Contains(ctx.IO.MousePos) && !clickedOnKeyframe)
+            if (ImGui.IsMouseClicked((ImGuiMouseButton)1) && contentRect.Contains(ctx.IO.MousePos) &&
+                !clickedOnKeyframe)
             {
                 int hoveredRow = (int)((ctx.IO.MousePos.Y - ctx.ContentMin.Y) / ctx.ItemHeight);
-                state.contextTrackIndex = hoveredRow >= 0 && hoveredRow < visibleTracks.Count ? safeTracks.IndexOf(visibleTracks[hoveredRow]) : -1;
-                state.contextMouseFrame = (int)Math.Round((ctx.IO.MousePos.X - (ctx.ContentMin.X + ctx.LeftOffset)) / state.framePixelWidth + state.ZoomState.ViewMin);
+                state.contextTrackIndex = hoveredRow >= 0 && hoveredRow < visibleTracks.Count
+                    ? safeTracks.IndexOf(visibleTracks[hoveredRow])
+                    : -1;
+                state.contextMouseFrame =
+                    (int)Math.Round((ctx.IO.MousePos.X - (ctx.ContentMin.X + ctx.LeftOffset)) / state.framePixelWidth +
+                                    state.ZoomState.ViewMin);
                 state.contextKeyframe = null;
                 requestContextMenu = true;
             }
         }
 
-        private void FinalizeBoxSelection(RenderContext ctx, ImSequencerState state, List<SequencerRow> safeTracks, List<SequencerRow> visibleTracks)
+        private void FinalizeBoxSelection(RenderContext ctx, ImSequencerState state, List<SequencerRow> safeTracks,
+            List<SequencerRow> visibleTracks)
         {
             var minX = Math.Min(state.BoxSelectionStart.X, state.BoxSelectionEnd.X);
             var maxX = Math.Max(state.BoxSelectionStart.X, state.BoxSelectionEnd.X);
@@ -568,21 +645,27 @@ namespace TimelineAnimator.ImSequencer
                 var track = visibleTracks[i];
                 int absoluteIndex = safeTracks.IndexOf(track);
                 float y = ctx.ContentMin.Y + ctx.ItemHeight * i + (ctx.ItemHeight / 2f);
-                
+
                 foreach (var kf in track.Keyframes.ToList())
                 {
-                    float x = (float)(ctx.ContentMin.X + ctx.LeftOffset + (kf.Frame - state.ZoomState.ViewMin) * state.framePixelWidth);
-                    var kfRect = new ImRect(new Vector2(x - 6f, y - 6f), new Vector2(x + 6f, y + 6f));
+                    float x = (float)(ctx.ContentMin.X + ctx.LeftOffset +
+                                      (kf.Frame - state.ZoomState.ViewMin) * state.framePixelWidth);
+                    float hitRadius = ctx.ItemHeight * 0.3f;
+
+                    var kfRect = new ImRect(new Vector2(x - hitRadius, y - hitRadius),
+                        new Vector2(x + hitRadius, y + hitRadius));
                     if (selectionRect.Overlaps(kfRect))
                         state.SelectedKeyframes.Add(new SelectedKeyframe(absoluteIndex, kf.Id));
                 }
             }
         }
 
-        private void HandlePlayhead(RenderContext ctx, ImSequencerState state, AnimationClip clip, ref int currentFrame, int firstFrameUsed)
+        private void HandlePlayhead(RenderContext ctx, ImSequencerState state, AnimationClip clip, ref int currentFrame,
+            int firstFrameUsed)
         {
-            var topRect = new ImRect(new Vector2(ctx.CanvasPos.X + ctx.LeftOffset, ctx.CanvasPos.Y), new Vector2(ctx.CanvasPos.X + ctx.CanvasSize.X, ctx.CanvasPos.Y + ctx.ItemHeight));
-            
+            var topRect = new ImRect(new Vector2(ctx.CanvasPos.X + ctx.LeftOffset, ctx.CanvasPos.Y),
+                new Vector2(ctx.CanvasPos.X + ctx.CanvasSize.X, ctx.CanvasPos.Y + ctx.ItemHeight));
+
             if (!state.IsDragging && !state.IsBoxSelecting && topRect.Contains(ctx.IO.MousePos) && ctx.IO.MouseDown[0])
                 state.MovingCurrentFrame = true;
 
@@ -591,46 +674,58 @@ namespace TimelineAnimator.ImSequencer
                 state.SelectedKeyframes.Clear();
                 int safeMin = Math.Min(clip.StartFrame, clip.EndFrame);
                 int safeMax = Math.Max(clip.StartFrame, clip.EndFrame);
-                int calculatedFrame = state.framePixelWidth > 0 ? (int)((ctx.IO.MousePos.X - topRect.Min.X) / state.framePixelWidth) + firstFrameUsed : safeMin;
+                int calculatedFrame = state.framePixelWidth > 0
+                    ? (int)((ctx.IO.MousePos.X - topRect.Min.X) / state.framePixelWidth) + firstFrameUsed
+                    : safeMin;
                 currentFrame = Math.Clamp(calculatedFrame, safeMin, safeMax);
                 if (!ctx.IO.MouseDown[0]) state.MovingCurrentFrame = false;
             }
 
-            var cursorOffset = (float)(ctx.ContentMin.X + ctx.LeftOffset + (currentFrame - state.ZoomState.ViewMin) * state.framePixelWidth);
+            var cursorOffset = (float)(ctx.ContentMin.X + ctx.LeftOffset +
+                                       (currentFrame - state.ZoomState.ViewMin) * state.framePixelWidth);
             if (cursorOffset >= ctx.ContentMin.X + ctx.LeftOffset && cursorOffset <= ctx.ContentMax.X)
             {
-                ctx.DrawList.AddLine(new Vector2(cursorOffset, ctx.ContentMin.Y), new Vector2(cursorOffset, ctx.ContentMax.Y), ImGui.GetColorU32(Color_Playhead), 1f);
-                
+                ctx.DrawList.AddLine(new Vector2(cursorOffset, ctx.ContentMin.Y),
+                    new Vector2(cursorOffset, ctx.ContentMax.Y), ImGui.GetColorU32(Color_Playhead), 1f);
+
                 uint playheadColor = ImGui.GetColorU32(Color_Playhead);
                 uint textColor = ImGui.GetColorU32(Color_Playhead_Text);
+
                 float headerBottom = ctx.CanvasPos.Y + ctx.ItemHeight;
-                float rounding = 3f;
-                float padding = 4f;
-                
+                float rounding = 3f * (ctx.ItemHeight / 20.0f);
+                float padding = 4f * (ctx.ItemHeight / 20.0f);
+
                 string frameText = $"{currentFrame}";
                 var textSize = ImGui.CalcTextSize(frameText);
-                float triHeight = 5f;
-                float boxHeight = textSize.Y + (padding / 2);
+
+                float triHeight = ctx.ItemHeight * 0.25f;
+                float boxHeight = textSize.Y + padding;
                 float boxWidthHalf = (textSize.X / 2) + padding;
+
                 float triBaseY = headerBottom - triHeight - 1f;
                 float boxBottom = triBaseY;
                 float boxTop = boxBottom - boxHeight;
-                
+
                 var boxMin = new Vector2(cursorOffset - boxWidthHalf, boxTop);
                 var boxMax = new Vector2(cursorOffset + boxWidthHalf, boxBottom);
-                
-                ctx.ParentDrawList.AddRectFilled(boxMin, boxMax, playheadColor, rounding, ImDrawFlags.RoundCornersTopLeft | ImDrawFlags.RoundCornersTopRight);
-                
+
+                ctx.ParentDrawList.AddRectFilled(boxMin, boxMax, playheadColor, rounding,
+                    ImDrawFlags.RoundCornersTopLeft | ImDrawFlags.RoundCornersTopRight);
+
                 var triP1 = new Vector2(cursorOffset - boxWidthHalf, boxBottom);
                 var triP2 = new Vector2(cursorOffset + boxWidthHalf, boxBottom);
                 var triP3 = new Vector2(cursorOffset, headerBottom - 1f);
-                
+
                 ctx.ParentDrawList.AddTriangleFilled(triP1, triP2, triP3, playheadColor);
-                ctx.ParentDrawList.AddText(new Vector2(cursorOffset - (textSize.X / 2), boxTop + (padding / 4)), textColor, frameText);
+
+                ctx.ParentDrawList.AddText(
+                    new Vector2(cursorOffset - (textSize.X / 2), boxTop + ((boxHeight - textSize.Y) * 0.5f)), textColor,
+                    frameText);
             }
         }
 
-        private bool ProcessDragging(RenderContext ctx, ImSequencerState state, List<SequencerRow> safeTracks, AnimationClip clip)
+        private bool ProcessDragging(RenderContext ctx, ImSequencerState state, List<SequencerRow> safeTracks,
+            AnimationClip clip)
         {
             ImGui.SetNextFrameWantCaptureMouse(true);
             var diffX = (int)ctx.IO.MousePos.X - state.movingPos;
@@ -643,7 +738,8 @@ namespace TimelineAnimator.ImSequencer
                 {
                     var row = safeTracks[sk.trackIndex];
                     var kf = row.Keyframes.FirstOrDefault(k => k.Id == sk.keyframeId);
-                    return kf != null && kf.Frame + diffFrame >= clip.StartFrame && kf.Frame + diffFrame <= clip.EndFrame;
+                    return kf != null && kf.Frame + diffFrame >= clip.StartFrame &&
+                           kf.Frame + diffFrame <= clip.EndFrame;
                 });
 
                 if (canMove)
@@ -654,6 +750,7 @@ namespace TimelineAnimator.ImSequencer
                         var kf = row.Keyframes.FirstOrDefault(k => k.Id == sk.keyframeId);
                         if (kf != null) kf.Frame += diffFrame;
                     }
+
                     state.movingPos += (int)Math.Round(diffFrame * state.framePixelWidth);
                     ret = true;
                 }
@@ -665,13 +762,13 @@ namespace TimelineAnimator.ImSequencer
                 {
                     var row = safeTracks[trackIndex];
                     row.PropTrack?.Curve.Sort();
-                    
+
                     if (row.PropTrack != null)
                     {
                         var selectedIds = state.SelectedKeyframes.Select(sk => sk.keyframeId).ToHashSet();
                         var frameGroups = row.Keyframes.GroupBy(k => k.Frame);
                         var toDelete = new HashSet<Guid>();
-                        
+
                         foreach (var group in frameGroups)
                         {
                             if (group.Count() > 1)
@@ -683,15 +780,17 @@ namespace TimelineAnimator.ImSequencer
                                         toDelete.Add(kf.Id);
                             }
                         }
-                        
+
                         foreach (var id in toDelete)
                         {
                             row.Keyframes.RemoveAll(k => k.Id == id);
                         }
                     }
                 }
+
                 state.IsDragging = false;
             }
+
             return ret;
         }
 
@@ -700,12 +799,13 @@ namespace TimelineAnimator.ImSequencer
             var scrollbarCursorPos = ImGui.GetCursorPos();
             ImGui.SetCursorPosX(scrollbarCursorPos.X + leftOffset);
             ImGui.SetItemAllowOverlap();
-            
+
             if (ZoomScrollbar.Draw("sequencer_zoom", ref state.ZoomState, height))
             {
                 double viewSpan = Math.Max(state.ZoomState.ViewMax - state.ZoomState.ViewMin, 1);
                 state.framePixelWidth = (float)(viewWidthPixels / viewSpan);
             }
+
             ImGui.SetCursorPos(new Vector2(scrollbarCursorPos.X, scrollbarCursorPos.Y + height));
         }
     }

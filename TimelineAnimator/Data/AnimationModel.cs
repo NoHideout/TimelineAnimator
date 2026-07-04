@@ -14,7 +14,6 @@ namespace TimelineAnimator.Data
         
         public AnimationPose BasePose { get; set; } = new(); //for saving/loading and always having something to animate from
         public List<AnimationObject> Objects { get; } = new();
-        public AnimationObject? GetObject(Guid id) => Objects.FirstOrDefault(o => o.Id == id);
     }
 
     public enum ObjectType { Bone, Camera, Folder }
@@ -30,6 +29,7 @@ namespace TimelineAnimator.Data
         public ObjectType Type { get; set; }
         
         public bool IsExpanded { get; set; } = true;
+        public bool IsPropertiesExpanded { get; set; } = false;
         public int Depth { get; set; } = 0;
 
         public List<PropertyTrack> Tracks { get; } = new();

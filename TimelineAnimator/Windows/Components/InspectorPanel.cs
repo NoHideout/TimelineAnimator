@@ -27,8 +27,8 @@ namespace TimelineAnimator.Windows.Components
                 return;
             }
 
-            activeSeq.DrawInspector(Services.PlaybackService.CurrentFrame);
             DrawGlobalSettings(activeSeq);
+            activeSeq.DrawInspector(Services.PlaybackService.CurrentFrame);
 
             AnimationObject? targetObj = null;
 
@@ -58,19 +58,6 @@ namespace TimelineAnimator.Windows.Components
                 ImGui.Text($"Object: {targetObj.DisplayName}");
                 
                 DrawTrackControls(targetObj, activeSeq);
-
-                ImGui.Spacing();
-                if (!modifier) ImGui.BeginDisabled();
-                if (ImGui.Button("Delete Object"))
-                {
-                    activeSeq.Clip.Objects.Remove(targetObj);
-                    workspace.SharedSelectedEntry = -1;
-                }
-                if (!modifier)
-                {
-                    ImGui.EndDisabled();
-                    ShowTooltip($"Hold {Services.Configuration.ModifierKey} to delete object", disabled: true);
-                }
             }
 
             var selectedKeys = activeSeq.GetSelectedKeyframes();
@@ -120,6 +107,7 @@ namespace TimelineAnimator.Windows.Components
                     if (success && paths.Count > 0) Services.ProjectService.LoadAnimation(paths[0], activeSequencer);
                 }, 1, configDir);
             }
+            ImGui.Spacing();
         }
 
         private static void DrawKeyframeStyleSettings(List<CurveKeyframe> selectedKeys)

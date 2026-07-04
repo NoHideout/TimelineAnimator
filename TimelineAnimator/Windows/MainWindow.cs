@@ -12,7 +12,6 @@ namespace TimelineAnimator.Windows
     public class MainWindow : Window, IDisposable
     {
         private bool inspectorVisible = true;
-        private const float InspectorWidth = 250f;
         private readonly ImSequencer.ImSequencerCore timelineRenderer = new();
 
         public MainWindow() : base("Timeline Animator##SequencerMain")
@@ -32,33 +31,37 @@ namespace TimelineAnimator.Windows
         {
             var style = ImGui.GetStyle();
             float totalWidth = ImGui.GetContentRegionAvail().X;
-
+    
             ToolbarPanel.Draw();
             ImGui.Separator();
 
-            float remainingHeight = ImGui.GetContentRegionAvail().Y;
-            const float toggleButtonWidth = 15f;
-            float sequencerWidth = totalWidth - toggleButtonWidth - style.ItemSpacing.X;
-            if (inspectorVisible) sequencerWidth -= InspectorWidth + style.ItemSpacing.X;
+            float scaleFactor = ImGui.GetFrameHeight() / 20f;
+            float scaledInspectorWidth = 250f * scaleFactor;
+            float scaledToggleButtonWidth = 15f * scaleFactor;
+    
+            float availableHeight = MathF.Floor(ImGui.GetContentRegionAvail().Y); 
 
-            ImGui.BeginChild("SequencerArea", new Vector2(sequencerWidth, remainingHeight), false);
-            DrawSequencerTabs(sequencerWidth, remainingHeight);
+            float sequencerWidth = totalWidth - scaledToggleButtonWidth - style.ItemSpacing.X;
+            if (inspectorVisible) sequencerWidth -= scaledInspectorWidth + style.ItemSpacing.X;
+
+            ImGui.BeginChild("SequencerArea", new Vector2(sequencerWidth, availableHeight), false);
+            DrawSequencerTabs();
             ImGui.EndChild();
 
             ImGui.SameLine();
-            DrawInspectorToggle(remainingHeight);
+            DrawInspectorToggle(availableHeight, scaledToggleButtonWidth);
+
             if (inspectorVisible)
             {
                 ImGui.SameLine();
-                ImGui.BeginChild("InspectorPanel", new Vector2(InspectorWidth, remainingHeight), true);
-
+                ImGui.BeginChild("InspectorPanel", new Vector2(scaledInspectorWidth, availableHeight), true);
                 InspectorPanel.Draw();
-                
+        
                 ImGui.EndChild();
             }
         }
 
-        private void DrawSequencerTabs(float width, float height)
+        private void DrawSequencerTabs()
         {
             if (!ImGui.BeginTabBar("SequencerTabs", ImGuiTabBarFlags.Reorderable)) return;
 
@@ -119,13 +122,15 @@ namespace TimelineAnimator.Windows
             ImGui.EndTabBar();
         }
 
-        private void DrawInspectorToggle(float height)
+        private void DrawInspectorToggle(float height, float width)
         {
             var icon = inspectorVisible ? FontAwesomeIcon.AngleRight : FontAwesomeIcon.AngleLeft;
-            var size = new Vector2(15f, height);
+            var size = new Vector2(width, height);
 
-            if (ImGuiComponents.IconButton(icon, size))
+            ImGui.PushFont(Services.PluginInterface.UiBuilder.FontIcon);
+            if (ImGui.Button(icon.ToIconString(), size))
                 inspectorVisible = !inspectorVisible;
+            ImGui.PopFont();
         }
     }
 }

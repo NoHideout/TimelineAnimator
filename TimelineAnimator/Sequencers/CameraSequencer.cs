@@ -140,17 +140,14 @@ namespace TimelineAnimator.Sequencers
 
         public override void DrawInspector(int currentFrame)
         {
-            ImGui.Text("Camera Controls");
             ImGui.Separator();
-            ImGui.Spacing();
-
+            ImGui.Text("Space Settings");
             if (Clip.BasePose.Camera.HasValue)
             {
-                ImGui.Text("Space Settings");
                 var camPose = Clip.BasePose.Camera.Value;
                 bool isRelative = camPose.RelativeToPlayer;
                 
-                if (ImGui.Checkbox("Relative to Player (Object 0)", ref isRelative))
+                if (ImGui.Checkbox("Relative to Player", ref isRelative))
                 {
                     camPose.RelativeToPlayer = isRelative;
                     Clip.BasePose.Camera = camPose;
