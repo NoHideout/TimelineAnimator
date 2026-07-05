@@ -3,6 +3,25 @@ using System.Runtime.InteropServices;
 
 namespace TimelineAnimator
 {
+    [StructLayout(LayoutKind.Explicit)]
+    public struct XINPUT_STATE
+    {
+        [FieldOffset(0)] public uint dwPacketNumber;
+        [FieldOffset(4)] public XINPUT_GAMEPAD Gamepad;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct XINPUT_GAMEPAD
+    {
+        public ushort wButtons;
+        public byte bLeftTrigger;
+        public byte bRightTrigger;
+        public short sThumbLX;
+        public short sThumbLY;
+        public short sThumbRX;
+        public short sThumbRY;
+    }
+
     public class InputManager
     {
         private bool wasPlaybackKeyPressed = false;
@@ -10,6 +29,22 @@ namespace TimelineAnimator
 
         [DllImport("user32.dll")] //TODO should handle later through CameraService or keystate
         private static extern short GetAsyncKeyState(int vKey);
+
+        [DllImport("xinput1_4.dll")]
+        private static extern int XInputGetState(int dwUserIndex, out XINPUT_STATE pState);
+
+        public bool TryGetGamepad(out XINPUT_STATE state)
+        {
+            state = default;
+            try
+            {
+                return XInputGetState(0, out state) == 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         private bool IsKeyPressed(VirtualKey key)
         {

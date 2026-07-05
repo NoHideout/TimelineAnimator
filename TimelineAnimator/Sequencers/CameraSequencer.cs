@@ -140,10 +140,13 @@ namespace TimelineAnimator.Sequencers
 
         public override void DrawInspector(int currentFrame)
         {
+            ImGui.Text("Camera Controls");
             ImGui.Separator();
-            ImGui.Text("Space Settings");
+            ImGui.Spacing();
+
             if (Clip.BasePose.Camera.HasValue)
             {
+                ImGui.Text("Space Settings");
                 var camPose = Clip.BasePose.Camera.Value;
                 bool isRelative = camPose.RelativeToPlayer;
                 
@@ -153,7 +156,6 @@ namespace TimelineAnimator.Sequencers
                     Clip.BasePose.Camera = camPose;
                     
                     ConvertCameraSpace(isRelative);
-                    
                     ApplyPose(currentFrame);
                 }
                 
@@ -325,7 +327,7 @@ namespace TimelineAnimator.Sequencers
             Services.CameraService.CustomMatrix = invertedView;
             Services.CameraService.CustomFov = fov;
         }
-        
+
         private void HandleFreeCamInput()
         {
             int scrollDelta = Services.CameraService.MouseWheel;
@@ -348,26 +350,73 @@ namespace TimelineAnimator.Sequencers
                 }
             }
 
-            if (ImGui.GetIO().WantCaptureKeyboard) return;
+            bool hasGamepad = Services.InputManager.TryGetGamepad(out var gpState);
+            if (hasGamepad)
+            {
+                float deadzone = 8000f;
+                float gamepadLookSensitivity = lookSensitivity * 0.5f; 
+
+                float rx = Math.Abs((float)gpState.Gamepad.sThumbRX) > deadzone ? gpState.Gamepad.sThumbRX / 32767f : 0f;
+                float ry = Math.Abs((float)gpState.Gamepad.sThumbRY) > deadzone ? gpState.Gamepad.sThumbRY / 32767f : 0f;
+                
+                rx *= Math.Abs(rx); 
+                ry *= Math.Abs(ry);
+
+                if (rx != 0 || ry != 0)
+                {
+                    eulerAngles.Y -= rx * gamepadLookSensitivity * 15f;
+                    eulerAngles.X += ry * gamepadLookSensitivity * 15f;
+                    eulerAngles.X = Math.Clamp(eulerAngles.X, -1.57f, 1.57f);
+                    rotation = Quaternion.CreateFromYawPitchRoll(eulerAngles.Y, eulerAngles.X, eulerAngles.Z);
+                }
+            }
+
+            if (ImGui.GetIO().WantCaptureKeyboard && !hasGamepad) return;
 
             var forward = Vector3.Transform(new Vector3(0, 0, 1), rotation);
             var right = Vector3.Transform(new Vector3(1, 0, 0), rotation);
             var up = new Vector3(0, 1, 0);
             Vector3 moveInput = Vector3.Zero;
 
-            if (Services.KeyState[VirtualKey.W]) moveInput -= forward;
-            if (Services.KeyState[VirtualKey.S]) moveInput += forward;
-            if (Services.KeyState[VirtualKey.A]) moveInput -= right;
-            if (Services.KeyState[VirtualKey.D]) moveInput += right;
-            if (Services.KeyState[VirtualKey.E]) moveInput += up;
-            if (Services.KeyState[VirtualKey.Q]) moveInput -= up;
+            if (!ImGui.GetIO().WantCaptureKeyboard)
+            {
+                if (Services.KeyState[VirtualKey.W]) moveInput -= forward;
+                if (Services.KeyState[VirtualKey.S]) moveInput += forward;
+                if (Services.KeyState[VirtualKey.A]) moveInput -= right;
+                if (Services.KeyState[VirtualKey.D]) moveInput += right;
+                if (Services.KeyState[VirtualKey.E]) moveInput += up;
+                if (Services.KeyState[VirtualKey.Q]) moveInput -= up;
+            }
 
             float currentSpeed = flySpeed;
+
+            if (hasGamepad)
+            {
+                float deadzone = 8000f;
+                float lx = Math.Abs((float)gpState.Gamepad.sThumbLX) > deadzone ? gpState.Gamepad.sThumbLX / 32767f : 0f;
+                float ly = Math.Abs((float)gpState.Gamepad.sThumbLY) > deadzone ? gpState.Gamepad.sThumbLY / 32767f : 0f;
+                
+                lx *= Math.Abs(lx);
+                ly *= Math.Abs(ly);
+                
+                float lt = gpState.Gamepad.bLeftTrigger / 255f;
+                float rt = gpState.Gamepad.bRightTrigger / 255f;
+                float upDown = rt - lt;
+
+                moveInput += right * lx;
+                moveInput -= forward * ly;
+                moveInput += up * upDown;
+
+                if ((gpState.Gamepad.wButtons & 0x0200) != 0) currentSpeed *= 3.0f;
+            }
+
             if (Services.KeyState[VirtualKey.SHIFT]) currentSpeed *= 3.0f;
 
             if (moveInput.LengthSquared() > 0)
             {
-                moveInput = Vector3.Normalize(moveInput);
+                float len = moveInput.Length();
+                if (len > 1.0f) moveInput /= len;
+
                 position += moveInput * currentSpeed * ImGui.GetIO().DeltaTime;
             }
         }
