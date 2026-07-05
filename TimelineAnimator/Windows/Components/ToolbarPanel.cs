@@ -3,7 +3,7 @@ using Dalamud.Interface;
 using Dalamud.Interface.Components;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
-using TimelineAnimator.Sequencers;
+using Dalamud.Interface.Colors;
 
 namespace TimelineAnimator.Windows.Components
 {
@@ -62,7 +62,7 @@ namespace TimelineAnimator.Windows.Components
             ImGui.SameLine();
             ImGui.SetCursorPosX(midX);
 
-            var icon = Services.PlaybackService.IsPlaying ? FontAwesomeIcon.PauseCircle : FontAwesomeIcon.PlayCircle;
+            var icon = Services.PlaybackService.IsPlaying && !Services.PlaybackService.IsRecording ? FontAwesomeIcon.PauseCircle : FontAwesomeIcon.PlayCircle;
             if (ImGuiComponents.IconButton(icon))
                 Services.PlaybackService.TogglePlay();
             ShowTooltip("Start / Pause Playback.");
@@ -71,6 +71,24 @@ namespace TimelineAnimator.Windows.Components
             if (ImGuiComponents.IconButton(FontAwesomeIcon.StopCircle))
                 Services.PlaybackService.Stop();
             ShowTooltip("Stop Playback.");
+            
+            if (Services.EorzeaCamcorderIpc.IsAvailable)
+            {
+                ImGui.SameLine();
+                ImGui.SetCursorPosX(width - itemHeight);
+                
+                bool isRecording = Services.PlaybackService.IsRecording;
+                
+                using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudRed, isRecording))
+                {
+                    if (ImGuiComponents.IconButton(FontAwesomeIcon.DotCircle))
+                    {
+                        if (isRecording) Services.PlaybackService.Stop();
+                        else Services.PlaybackService.StartRecording();
+                    }
+                }
+                ShowTooltip(isRecording ? "Stop Recording" : "Record Animation (Requires EorzeaCamcorder)");
+            }
         }
 
         private static void ShowTooltip(string text, bool disabled = false)

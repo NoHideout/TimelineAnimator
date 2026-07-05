@@ -10,7 +10,6 @@ namespace TimelineAnimator.Interop
 {
     public class KtisisIpc
     {
-        private readonly IPluginLog log = Services.Log;
         public bool IsAvailable { get; private set; } = true;
 
         private readonly ICallGateSubscriber<(int, int)>? _getVersion;
@@ -34,7 +33,7 @@ namespace TimelineAnimator.Interop
             }
             catch (Exception e)
             {
-                log.Error(e, "Ktisis IPC init error.");
+                Services.Log.Error(e, "Ktisis IPC init error.");
                 IsAvailable = false;
             }
         }
@@ -48,7 +47,7 @@ namespace TimelineAnimator.Interop
             }
             catch (Exception e)
             {
-                log.Error(e, "Error calling Ktisis.GetVersion");
+                Services.Log.Error(e, "Error calling Ktisis.GetVersion");
                 return (0, 0);
             }
         }
@@ -63,7 +62,7 @@ namespace TimelineAnimator.Interop
             }
             catch (Exception e)
             {
-                log.Error(e, "Error calling Ktisis.IsPosing");
+                Services.Log.Error(e, "Error calling Ktisis.IsPosing");
                 return false;
             }
         }
@@ -77,7 +76,7 @@ namespace TimelineAnimator.Interop
             }
             catch (Exception e)
             {
-                log.Error(e, "Error calling Ktisis.GetSelectedBonesAsync");
+                Services.Log.Error(e, "Error calling Ktisis.GetSelectedBonesAsync");
                 return new Dictionary<int, HashSet<string>>();
             }
         }
@@ -92,7 +91,7 @@ namespace TimelineAnimator.Interop
                 }
                 catch (Exception e)
                 {
-                    log.Error(e,"Failed to send frame to Ktisis");
+                    Services.Log.Error(e,"Failed to send frame to Ktisis");
                 }
             }
         }
