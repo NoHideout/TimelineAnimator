@@ -11,8 +11,8 @@ namespace TimelineAnimator.Windows
     {
         public TutorialWindow() : base("Welcome to Timeline Animator!")
         {
-            Size = new Vector2(450, 380);
-            SizeCondition = ImGuiCond.FirstUseEver;
+            Size = new Vector2(460, 420);
+            SizeCondition = ImGuiCond.Appearing;
         }
 
         public void Dispose()
@@ -23,49 +23,45 @@ namespace TimelineAnimator.Windows
         {
             using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudRed))
             {
-                ImGui.SetWindowFontScale(1.5f);
-                ImGui.TextWrapped("Warning: this Plugin is currently in an early experimental stage.");
+                ImGui.SetWindowFontScale(1.25f);
+                ImGui.TextWrapped("Initial Release");
                 ImGui.SetWindowFontScale(1.0f);
             }
 
             using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudYellow))
             {
                 ImGui.TextWrapped(
-                    "You may encounter Bugs, Crashes or unintended Behavior. Some features are heavily under work in progress. Save files will still change and will break through updates");
+                    "This plugin is still in development. Expect potential bugs or crashes. Project file structures may change in future updates, which could break older save files.");
             }
 
             ImGui.Spacing();
             ImGui.Separator();
             ImGui.Spacing();
 
-            ImGui.TextWrapped("This is just a quick start guide!");
+            ImGui.TextWrapped("Quick Start Guide:");
             ImGui.Spacing();
 
             using var bgColor = ImRaii.PushColor(ImGuiCol.ChildBg, new Vector4(0.1f, 0.1f, 0.1f, 0.3f));
             using var rounding = ImRaii.PushStyle(ImGuiStyleVar.ChildRounding, 5f);
             using var padding = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(10f, 10f));
-            using (var child = ImRaii.Child("TutorialStepsFrame", new Vector2(0, 175), true))
+            using (var child = ImRaii.Child("QuickGuideFrame", new Vector2(0, 175), true))
             {
                 if (child)
                 {
                     ImGui.TextWrapped("1. Select the bones you want to animate in Ktisis.");
-                    ImGui.TextWrapped("2. Click the 'Add' button to create tracks for them, while they are selected.");
-
-                    using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudGrey))
-                        ImGui.TextWrapped("   (This will also create new timelines for actors).");
-
+                    ImGui.TextWrapped("2. Use the '+' icon in the toolbar to add the bones to the timeline.");
                     ImGui.TextWrapped("3. Move the play head (the vertical red line) to a frame.");
-                    ImGui.TextWrapped("4. Pose the bones and reselect all of them when you are ready to finish up the animation.");
-                    ImGui.TextWrapped("5. Click 'Add Selected Bones' again to create a new keyframe.");
-
-                    using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudGrey)) ImGui.TextWrapped("   (This will update an existing keyframe if you're on one).");
-                
-                    ImGui.TextWrapped("6. The Camera behaves similar. Make sure you have the free-cam setting in the inspector toggled on to keyframe or view the animation.");
+                    ImGui.TextWrapped("4. Pose the bones, reselect them and click '+' again to set a keyframe.");
+                    using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudGrey)) ImGui.TextWrapped("   (clicking '+' will also update existing keyframes).");
+                    ImGui.Spacing();
+                    ImGui.TextWrapped("5. For Cameras: Add a camera track, enable the Free Camera in the toolbar, and keyframe your views.");
                 }
             }
 
             ImGui.Spacing();
-
+            ImGui.TextWrapped("Right click a property track to access the Graph Editor for custom easing.");
+            ImGui.Spacing();
+            
             if (ImGui.Button("Don't show this again"))
             {
                 Services.Configuration.ShowTutorial = false;
