@@ -84,11 +84,13 @@ namespace TimelineAnimator.Core
                         var boneData = basePose.BonePoses.TryGetValue(TrackName, out var bone) 
                             ? bone 
                             : TransformPose.Identity;
-
+                        
+                        bool isNewTrack = false;
                         var obj = targetSequencer.Clip.Objects.FirstOrDefault(o => o.Name == TrackName);
     
                         if (obj == null)
                         {
+                            isNewTrack = true;
                             obj = new AnimationObject 
                             { 
                                 Name = TrackName, 
@@ -103,11 +105,13 @@ namespace TimelineAnimator.Core
 
                             targetSequencer.Clip.Objects.Add(obj);
                         }
+                        
+                        int targetFrame = isNewTrack ? 0 : playback.CurrentFrame;
 
                         void SetKey(PropertyType prop, float value)
                         {
                             var track = obj.GetOrAddTrack(prop);
-                            track.Curve.AddKey(playback.CurrentFrame, value);
+                            track.Curve.AddKey(targetFrame, value);
                         }
 
                         SetKey(PropertyType.PositionX, boneData.Position.X);
