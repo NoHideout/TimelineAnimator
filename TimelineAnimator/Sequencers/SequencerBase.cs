@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using TimelineAnimator.Data;
 using TimelineAnimator.ImSequencer;
@@ -73,36 +72,22 @@ namespace TimelineAnimator.Sequencers
         {
             var rows = GetFlattenedRows();
             if (index < 0 || index >= rows.Count) return;
+
             var targetRow = rows[index];
 
-            if (targetRow.AnimObject != null)
+            if (targetRow.AnimObject != null && targetRow.PropTrack == null && targetRow.Name != "Transform")
             {
-                var toDelete = new HashSet<Guid> { targetRow.Id };
-                bool added;
-                do
-                {
-                    added = false;
-                    foreach (var obj in Clip.Objects)
-                    {
-                        if (obj.ParentId.HasValue && toDelete.Contains(obj.ParentId.Value) && !toDelete.Contains(obj.Id))
-                        {
-                            toDelete.Add(obj.Id);
-                            added = true;
-                        }
-                    }
-                } while (added);
-                Clip.Objects.RemoveAll(o => toDelete.Contains(o.Id));
+                RemoveObjectSafely(targetRow.AnimObject);
             }
-            else if (targetRow.PropTrack != null)
-            {
-                foreach (var obj in Clip.Objects)
-                    obj.Tracks.RemoveAll(t => t.Id == targetRow.Id);
-            }
+        }
+        public void RemoveObjectSafely(AnimationObject obj)
+        {
+            Clip.Objects.Remove(obj);
             State.SelectedKeyframes.Clear();
             State.contextKeyframe = null;
             RebuildHierarchy();
         }
-
+        
         public void HandleContextMenu(bool modifierHeld, ref int sharedSelectedEntry)
         {
             using var popup = Dalamud.Interface.Utility.Raii.ImRaii.Popup("SequencerContextMenu");

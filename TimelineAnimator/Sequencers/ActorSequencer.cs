@@ -89,10 +89,28 @@ namespace TimelineAnimator.Sequencers
         {
             foreach (var obj in Clip.Objects)
             {
-                if (FullSkeletonHierarchy.TryGetValue(obj.Name, out var trueParentName))
+                if (obj.Type != ObjectType.Bone) continue;
+
+                string currentSearchName = obj.Name;
+                AnimationObject? closestLoadedParent = null;
+                
+                while (FullSkeletonHierarchy.TryGetValue(currentSearchName, out var parentName) && !string.IsNullOrEmpty(parentName))
                 {
-                    var parentObj = Clip.Objects.FirstOrDefault(o => o.Name == trueParentName);
-                    if (parentObj != null) obj.ParentId = parentObj.Id;
+                    closestLoadedParent = Clip.Objects.FirstOrDefault(o => o.Name == parentName);
+                    if (closestLoadedParent != null)
+                    {
+                        break;
+                    }
+                    currentSearchName = parentName;
+                }
+
+                if (closestLoadedParent != null)
+                {
+                    obj.ParentId = closestLoadedParent.Id;
+                }
+                else
+                {
+                    obj.ParentId = null;
                 }
             }
 
