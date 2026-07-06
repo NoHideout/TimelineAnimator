@@ -509,6 +509,38 @@ private void DrawLegend(RenderContext ctx, List<SequencerRow> safeTracks, List<S
                     int absoluteIndex = safeTracks.IndexOf(track);
                     float y = ctx.ContentMin.Y + ctx.ItemHeight * i + (ctx.ItemHeight / 2f);
 
+                    // fake kf
+                    if (track.PropTrack == null && track.AnimObject != null)
+                    {
+                        var aggregateFrames = track.AnimObject.Tracks
+                            .SelectMany(t => t.Curve.Keys)
+                            .Select(k => k.Frame)
+                            .Distinct();
+
+                        foreach (var frame in aggregateFrames)
+                        {
+                            float x = (float)(ctx.ContentMin.X + ctx.LeftOffset +
+                                              (frame - state.ZoomState.ViewMin) * state.framePixelWidth);
+                            
+                            if (x >= ctx.ContentMin.X + ctx.LeftOffset && x <= ctx.ContentMax.X)
+                            {
+                                float size = ctx.ItemHeight * 0.25f;
+                                float dSize = size + (ctx.ItemHeight * 0.05f);
+                                uint fakeColor = ImGui.GetColorU32(ImGuiCol.TextDisabled);
+
+                                var p = new Vector2[]
+                                { 
+                                    new(x, y - dSize), 
+                                    new(x + dSize, y), 
+                                    new(x, y + dSize), 
+                                    new(x - dSize, y) 
+                                };
+                                ctx.DrawList.AddConvexPolyFilled(ref p[0], p.Length, fakeColor);
+                            }
+                        }
+                    }
+
+                    // actual kf
                     foreach (var kf in track.Keyframes.ToList())
                     {
                         float x = (float)(ctx.ContentMin.X + ctx.LeftOffset +
@@ -519,6 +551,7 @@ private void DrawLegend(RenderContext ctx, List<SequencerRow> safeTracks, List<S
 
                         var keyframeRect = new ImRect(new Vector2(x - hitRadius, y - hitRadius),
                             new Vector2(x + hitRadius, y + hitRadius));
+
                         bool isHovered = keyframeRect.Contains(ctx.IO.MousePos);
                         bool isSelected = state.SelectedKeyframes.Contains(new SelectedKeyframe(absoluteIndex, kf.Id));
 
@@ -530,6 +563,7 @@ private void DrawLegend(RenderContext ctx, List<SequencerRow> safeTracks, List<S
                                 (int)Math.Round(
                                     (ctx.IO.MousePos.X - (ctx.ContentMin.X + ctx.LeftOffset)) / state.framePixelWidth +
                                     state.ZoomState.ViewMin);
+
                             requestContextMenu = true;
                             clickedOnKeyframe = true;
                         }
@@ -558,11 +592,9 @@ private void DrawLegend(RenderContext ctx, List<SequencerRow> safeTracks, List<S
                                     ctx.DrawList.AddRectFilled(new Vector2(x - size, y - size),
                                         new Vector2(x + size, y + size), drawColor);
                                     break;
-
                                 case KeyframeShape.Circle:
                                     ctx.DrawList.AddCircleFilled(new Vector2(x, y), size, drawColor);
                                     break;
-
                                 case KeyframeShape.Diamond:
                                 default:
                                     float dSize = size + (ctx.ItemHeight * 0.05f);
