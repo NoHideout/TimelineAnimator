@@ -1,5 +1,6 @@
 # Timeline Animator
 A Dalamud plugin for creating and editing bone animations directly in-game using a timeline sequencer.
+`https://raw.githubusercontent.com/NoHideout/TimelineAnimator/refs/heads/master/repo.json`
 
 ## Features
 * **Timeline Editor**: Visual sequencer for managing keyframes and tracks.
