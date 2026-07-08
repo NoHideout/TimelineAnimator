@@ -22,28 +22,41 @@ namespace TimelineAnimator.Sequencers
         public override void ApplyPose(int frame)
         {
             var matrices = new Dictionary<string, Matrix4x4>();
-            
+
+            foreach (var boneKvp in Clip.BasePose.BonePoses)
+            {
+                var pose = boneKvp.Value;
+                matrices[boneKvp.Key] = Matrix4x4.CreateScale(pose.Scale) *
+                                        Matrix4x4.CreateFromQuaternion(pose.Rotation) *
+                                        Matrix4x4.CreateTranslation(pose.Position);
+            }
+
             foreach (var obj in Clip.Objects)
             {
                 if (obj.Type != ObjectType.Bone) continue;
                 if (!Clip.BasePose.BonePoses.TryGetValue(obj.Name, out var defaultState)) continue;
 
-                float posX = EvaluateProperty(obj, PropertyType.PositionX, frame, defaultState.Position.X);
-                float posY = EvaluateProperty(obj, PropertyType.PositionY, frame, defaultState.Position.Y);
-                float posZ = EvaluateProperty(obj, PropertyType.PositionZ, frame, defaultState.Position.Z);
-                Vector3 pos = new Vector3(posX, posY, posZ);
+                var trackX = obj.GetTrack(PropertyType.PositionX);
+                var trackY = obj.GetTrack(PropertyType.PositionY);
+                var trackZ = obj.GetTrack(PropertyType.PositionZ);
 
-                var defaultEuler = AnimationHelpers.ToEulerAngles(defaultState.Rotation);
-                Quaternion rot = AnimationHelpers.EvaluateRotation(obj, frame, defaultEuler);
+                if (trackX != null || trackY != null || trackZ != null)
+                {
+                    float posX = EvaluateProperty(obj, PropertyType.PositionX, frame, defaultState.Position.X);
+                    float posY = EvaluateProperty(obj, PropertyType.PositionY, frame, defaultState.Position.Y);
+                    float posZ = EvaluateProperty(obj, PropertyType.PositionZ, frame, defaultState.Position.Z);
 
-                float scaleX = EvaluateProperty(obj, PropertyType.ScaleX, frame, defaultState.Scale.X);
-                float scaleY = EvaluateProperty(obj, PropertyType.ScaleY, frame, defaultState.Scale.Y);
-                float scaleZ = EvaluateProperty(obj, PropertyType.ScaleZ, frame, defaultState.Scale.Z);
-                Vector3 scale = new Vector3(scaleX, scaleY, scaleZ);
+                    var defaultEuler = AnimationHelpers.ToEulerAngles(defaultState.Rotation);
+                    Quaternion rot = AnimationHelpers.EvaluateRotation(obj, frame, defaultEuler);
 
-                matrices[obj.Name] = Matrix4x4.CreateScale(scale) * 
-                                     Matrix4x4.CreateFromQuaternion(rot) * 
-                                     Matrix4x4.CreateTranslation(pos);
+                    float scaleX = EvaluateProperty(obj, PropertyType.ScaleX, frame, defaultState.Scale.X);
+                    float scaleY = EvaluateProperty(obj, PropertyType.ScaleY, frame, defaultState.Scale.Y);
+                    float scaleZ = EvaluateProperty(obj, PropertyType.ScaleZ, frame, defaultState.Scale.Z);
+
+                    matrices[obj.Name] = Matrix4x4.CreateScale(new Vector3(scaleX, scaleY, scaleZ)) *
+                                         Matrix4x4.CreateFromQuaternion(rot) *
+                                         Matrix4x4.CreateTranslation(new Vector3(posX, posY, posZ));
+                }
             }
 
             if (matrices.Count > 0)
@@ -64,27 +77,28 @@ namespace TimelineAnimator.Sequencers
             bool isTrackContext = State.contextTrackIndex >= 0 && State.contextTrackIndex < rows.Count;
 
             if (!modifierHeld) ImGui.BeginDisabled();
-            
+
             if (ImGui.MenuItem("Delete Track", string.Empty, false, isTrackContext))
             {
                 RemoveTrackSafely(State.contextTrackIndex);
-                
+
                 if (sharedSelectedEntry == State.contextTrackIndex)
                 {
                     sharedSelectedEntry = -1;
                 }
-                
+
                 ImGui.CloseCurrentPopup();
             }
-            
+
             if (!modifierHeld) ImGui.EndDisabled();
 
-            if (!modifierHeld && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled) && Services.Configuration.ShowTooltips)
+            if (!modifierHeld && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled) &&
+                Services.Configuration.ShowTooltips)
             {
                 ImGui.SetTooltip($"Hold {Services.Configuration.ModifierKey} to delete this track.");
             }
         }
-        
+
         public override void RebuildHierarchy()
         {
             foreach (var obj in Clip.Objects)
@@ -93,14 +107,16 @@ namespace TimelineAnimator.Sequencers
 
                 string currentSearchName = obj.Name;
                 AnimationObject? closestLoadedParent = null;
-                
-                while (FullSkeletonHierarchy.TryGetValue(currentSearchName, out var parentName) && !string.IsNullOrEmpty(parentName))
+
+                while (FullSkeletonHierarchy.TryGetValue(currentSearchName, out var parentName) &&
+                       !string.IsNullOrEmpty(parentName))
                 {
                     closestLoadedParent = Clip.Objects.FirstOrDefault(o => o.Name == parentName);
                     if (closestLoadedParent != null)
                     {
                         break;
                     }
+
                     currentSearchName = parentName;
                 }
 
