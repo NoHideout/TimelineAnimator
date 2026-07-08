@@ -74,9 +74,10 @@ namespace TimelineAnimator.Interop
                         var parentTrans = modelTransforms[parentIndex];
                         var parentRot = new Quaternion(parentTrans.Rotation.X, parentTrans.Rotation.Y, parentTrans.Rotation.Z, parentTrans.Rotation.W);
                         var parentPos = new Vector3(parentTrans.Translation.X, parentTrans.Translation.Y, parentTrans.Translation.Z);
+                        var parentScale = new Vector3(parentTrans.Scale.X, parentTrans.Scale.Y, parentTrans.Scale.Z);
                         var invParentRot = Quaternion.Inverse(parentRot);
 
-                        localPos = Vector3.Transform(bonePos - parentPos, invParentRot);
+                        localPos = Vector3.Transform(bonePos - parentPos, invParentRot) / parentScale;
                         localRot = Quaternion.Normalize(invParentRot * boneRot);
                         parentName = hkaSkeleton->Bones[parentIndex].Name.String.Trim();
                     }
@@ -85,9 +86,10 @@ namespace TimelineAnimator.Interop
                         var parentTrans = parentModelTransforms[connectedParentBoneIndex];
                         var parentRot = new Quaternion(parentTrans.Rotation.X, parentTrans.Rotation.Y, parentTrans.Rotation.Z, parentTrans.Rotation.W);
                         var parentPos = new Vector3(parentTrans.Translation.X, parentTrans.Translation.Y, parentTrans.Translation.Z);
+                        var parentScale = new Vector3(parentTrans.Scale.X, parentTrans.Scale.Y, parentTrans.Scale.Z);
                         var invParentRot = Quaternion.Inverse(parentRot);
 
-                        localPos = Vector3.Transform(bonePos - parentPos, invParentRot);
+                        localPos = Vector3.Transform(bonePos - parentPos, invParentRot) / parentScale;
                         localRot = Quaternion.Normalize(invParentRot * boneRot);
                         parentName = parentHkaSkeleton->Bones[connectedParentBoneIndex].Name.String.Trim();
                     }
