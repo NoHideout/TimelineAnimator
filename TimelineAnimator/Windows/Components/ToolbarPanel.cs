@@ -56,21 +56,30 @@ namespace TimelineAnimator.Windows.Components
             
             ShowTooltip(tooltip, !canToggle);
 
-            float midWidth = (itemHeight * 2) + spacing;
+            float midWidth = (itemHeight * 4) + spacing;
             float midX = (width - midWidth) * 0.5f;
 
             ImGui.SameLine();
             ImGui.SetCursorPosX(midX);
-
-            var icon = Services.PlaybackService.IsPlaying && !Services.PlaybackService.IsRecording ? FontAwesomeIcon.PauseCircle : FontAwesomeIcon.PlayCircle;
-            if (ImGuiComponents.IconButton(icon))
-                Services.PlaybackService.TogglePlay();
-            ShowTooltip("Start / Pause Playback.");
-
+            if (ImGuiComponents.IconButton(FontAwesomeIcon.StepBackward))
+                Services.PlaybackService.StepBackward();
+            ShowTooltip("Step back 1 frame.");
+            
             ImGui.SameLine();
             if (ImGuiComponents.IconButton(FontAwesomeIcon.StopCircle))
                 Services.PlaybackService.Stop();
             ShowTooltip("Stop Playback.");
+
+            ImGui.SameLine();
+            var icon = Services.PlaybackService.IsPlaying && !Services.PlaybackService.IsRecording ? FontAwesomeIcon.PauseCircle : FontAwesomeIcon.PlayCircle;
+            if (ImGuiComponents.IconButton(icon))
+                Services.PlaybackService.TogglePlay();
+            ShowTooltip("Start / Pause Playback.");
+            
+            ImGui.SameLine();
+            if (ImGuiComponents.IconButton(FontAwesomeIcon.StepForward))
+                Services.PlaybackService.StepForward();
+            ShowTooltip("Step forward 1 frame.");
             
             if (Services.EorzeaCamcorderIpc.IsAvailable)
             {

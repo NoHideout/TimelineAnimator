@@ -50,7 +50,24 @@ namespace TimelineAnimator.Sequencers
             uiCore.Draw(Name, State, Clip, ref currentFrame, ref selectedEntry, modifierHeld);
             HandleContextMenu(modifierHeld, ref selectedEntry);
         }
+        
+        public void SelectKeyframesAtFrame(int frame)
+        {
+            var rows = GetFlattenedRows();
+            State.SelectedKeyframes.Clear();
 
+            for (int i = 0; i < rows.Count; i++)
+            {
+                var track = rows[i].PropTrack;
+                if (track == null) continue;
+
+                var key = track.Curve.Keys.FirstOrDefault(k => k.Frame == frame);
+                if (key == null) continue;
+
+                State.SelectedKeyframes.Add(new SelectedKeyframe(i, key.Id));
+            }
+        }
+        
         public List<CurveKeyframe> GetSelectedKeyframes()
         {
             var selectedIds = State.SelectedKeyframes.Select(sk => sk.keyframeId).ToHashSet();
@@ -112,7 +129,15 @@ namespace TimelineAnimator.Sequencers
             }
 
             ImGui.Separator();
+            
+            if (ImGui.MenuItem("Select Keyframes at Playhead"))
+            {
+                SelectKeyframesAtFrame(Services.PlaybackService.CurrentFrame);
+                ImGui.CloseCurrentPopup();
+            }
 
+            ImGui.Separator();
+            
             if (ImGui.MenuItem("Copy", string.Empty, false, canUseKeyframe))
             {
                 var keyframesToCopy = new List<CurveKeyframe>();

@@ -30,7 +30,27 @@ namespace TimelineAnimator.Core
                 }
             }
         }
+        
+        public void StepForward()
+        {
+            IsPlaying = false;
+            timeAccumulator = 0.0;
 
+            int maxFrame = Services.ProjectService.GetGlobalMaxFrame();
+            CurrentFrame = Math.Min(CurrentFrame + 1, maxFrame);
+            ApplyCurrentPose();
+        }
+
+        public void StepBackward()
+        {
+            IsPlaying = false;
+            timeAccumulator = 0.0;
+
+            int minFrame = Services.ProjectService.GetGlobalMinFrame();
+            CurrentFrame = Math.Max(CurrentFrame - 1, minFrame);
+            ApplyCurrentPose();
+        }
+        
         public void StartRecording()
         {
             if (!Services.EorzeaCamcorderIpc.IsAvailable) return;
